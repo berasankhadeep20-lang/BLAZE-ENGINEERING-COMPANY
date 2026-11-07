@@ -103,3 +103,11 @@ export function formatQty(milli: QtyMilli): string {
   const frac = String(abs % 1000).padStart(3, '0').replace(/0+$/, '');
   return `${sign}${whole}${frac ? `.${frac}` : ''}`;
 }
+
+/** Plain decimal rupees for spreadsheets and CSV, no digit grouping: 125000 -> "1250.00". */
+export function formatPlainRupees(paise: Paise): string {
+  assertSafeInt(paise, 'amount');
+  const abs = Math.abs(paise);
+  const body = `${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+  return paise < 0 ? `-${body}` : body;
+}

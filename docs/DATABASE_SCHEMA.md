@@ -36,6 +36,8 @@ Full DDL: `src/infrastructure/db/migrations/001_initial.sql` (19 tables, 22 trig
 - GST computation and balance arithmetic live in the domain/service layers (unit-tested), not in SQL.
 - Legacy import will use separate `legacy_*` staging tables created by a later migration.
 
+- `item.gst_rate_bp` accepts 0 to 10000 (0% to 100%); the app never hard-codes legal tax slabs.
+
 ## Known follow-ups
 - Negative-stock override: not possible in v1 (CHECK constraint); see ADR 0002.
 - Legacy opening balances/stock must be imported as OPENING ledger entries so `reconcile()` stays clean.

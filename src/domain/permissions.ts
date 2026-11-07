@@ -5,9 +5,9 @@
  */
 export const PERMISSIONS = {
   'inventory.view': 'View stock and the item list',
-  'item.create': 'Add items',
+  'item.create': 'Add items (also needs price.edit, because a new item carries rates and tax)',
   'item.edit': 'Edit item details (not prices)',
-  'price.edit': 'Change purchase and sale rates',
+  'price.edit': 'Change purchase rate, sale rate and GST rate',
   'stock.adjust': 'Correct stock (damaged, missing, counted)',
   'customer.view': 'View customers and their dues',
   'customer.create': 'Add customers (they wait for owner approval)',

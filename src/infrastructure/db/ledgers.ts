@@ -31,6 +31,7 @@ const STOCK_RULES = {
 } as const satisfies Record<string, SignRule>;
 
 export type StockReason = keyof typeof STOCK_RULES;
+export const STOCK_REASONS = Object.keys(STOCK_RULES) as StockReason[];
 const NOTE_REQUIRED = new Set<StockReason>(['DAMAGED', 'MISSING', 'COUNT_ADJUST']);
 
 export interface StockMovementInput {

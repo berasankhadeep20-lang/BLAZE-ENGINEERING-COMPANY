@@ -81,7 +81,7 @@ CREATE TABLE item (
   pack_size TEXT,
   purchase_rate_paise INTEGER NOT NULL DEFAULT 0 CHECK (purchase_rate_paise >= 0),
   sale_rate_paise INTEGER NOT NULL DEFAULT 0 CHECK (sale_rate_paise >= 0),
-  gst_rate_bp INTEGER NOT NULL DEFAULT 1800 CHECK (gst_rate_bp BETWEEN 0 AND 2800),
+  gst_rate_bp INTEGER NOT NULL DEFAULT 1800 CHECK (gst_rate_bp BETWEEN 0 AND 10000),
   qty_milli INTEGER NOT NULL DEFAULT 0 CHECK (qty_milli >= 0),
   reorder_qty_milli INTEGER NOT NULL DEFAULT 0 CHECK (reorder_qty_milli >= 0),
   supplier_id INTEGER REFERENCES supplier(id), location TEXT,

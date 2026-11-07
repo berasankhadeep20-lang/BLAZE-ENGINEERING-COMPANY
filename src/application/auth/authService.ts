@@ -167,6 +167,13 @@ export class AuthService {
     return toSessionUser(p);
   }
 
+  /** The signed-in user, without checking a specific permission (still refuses a session that must change its password first). */
+  requireSignedIn(token: string): SessionUser {
+    const user = this.getSession(token);
+    if (user.mustChangePassword) throw new AppError('PASSWORD_CHANGE_REQUIRED', 'you must set a new password first');
+    return user;
+  }
+
   /** The acting user as an Actor, for UnitOfWork.run. */
   actorFor(user: SessionUser): Actor {
     return { userId: user.id, role: user.role };
