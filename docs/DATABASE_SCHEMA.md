@@ -37,5 +37,7 @@ Full DDL: `src/infrastructure/db/migrations/001_initial.sql` (19 tables, 22 trig
 - Legacy import will use separate `legacy_*` staging tables created by a later migration.
 
 ## Known follow-ups
+- Negative-stock override: not possible in v1 (CHECK constraint); see ADR 0002.
+- Legacy opening balances/stock must be imported as OPENING ledger entries so `reconcile()` stays clean.
 - Whether payments may be allocated to specific bills (`sale_bill_id`) or only to the account balance: decide in M5.
 - Settings keys (business name, address, GSTIN, bank, terms, tax display rules, `warn_below_cost`, `allow_negative_stock_override`) to be listed in M10.
