@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.blazebak
+*.mdb
+*.accdb
+legacy-data/
+.env
