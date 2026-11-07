@@ -3,6 +3,9 @@ export const ERROR_CODES = [
   'VALIDATION',
   'NOT_FOUND',
   'PERMISSION_DENIED',
+  'AUTH_FAILED', // wrong credentials, unknown user, disabled account or expired session (deliberately indistinguishable)
+  'ACCOUNT_LOCKED',
+  'PASSWORD_CHANGE_REQUIRED',
   'INSUFFICIENT_STOCK',
   'OVERPAYMENT',
   'CUSTOMER_NOT_APPROVED',
