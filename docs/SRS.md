@@ -32,8 +32,9 @@ Out of scope for v1: networking/sync, legacy data import (later phase).
 - Keyboard-friendly forms; usable from 1366x768 upward.
 
 ## 5. Observations from the sample bill (design inputs)
-1. Delivery charge was back-solved: goods total Rs 2,891.00; delivery Rs 92.37 + 18% GST = Rs 109.00; final total exactly Rs 3,000.00.
-   Support delivery entry as pre-tax or tax-inclusive, plus an explicit round-off line.
+1. Delivery charge was back-solved to reach a round total: goods Rs 2,891.00; delivery Rs 92.37 + 18% GST (Rs 8.31 CGST + Rs 8.31 SGST)
+   gives Rs 2,999.99; an explicit round-off of +Rs 0.01 makes the final total exactly Rs 3,000.00.
+   Support pre-tax delivery entry, a "solve delivery for target total" helper, and an explicit round-off line.
 2. UOM carries pack size: "40 - LTR", "PCS - PCS", "500 - ML" -> model as `pack_size` + `unit`.
 3. CGST+SGST applies for intra-state supply; inter-state needs **IGST** (added beyond the original spec).
 4. Invoice number `BZ260150` = prefix + 2-digit year + 4-digit sequence; make format configurable, reset per financial year.

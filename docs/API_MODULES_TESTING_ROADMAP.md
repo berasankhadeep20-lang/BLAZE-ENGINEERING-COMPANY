@@ -36,7 +36,7 @@ Typed errors: INSUFFICIENT_STOCK, PERMISSION_DENIED, VALIDATION, OVERPAYMENT, CU
 ## Testing strategy
 - Unit (domain): GST splits, rounding, paise arithmetic, amount in words. **Golden test from the sample bill:** the engine must reproduce
   line totals 2183.00 / 129.80 / 578.20 (goods 2891.00), before-tax 2542.37, CGST 228.81, SGST 228.81, total tax 457.62, total 3000.00
-  (delivery 92.37 + 18% GST). Use a sanitized fake customer in fixtures, never real data.
+  (delivery 92.37 + 18% GST -> 2999.99, plus round-off +0.01). Use a sanitized fake customer in fixtures, never real data.
 - Integration (services + in-memory SQLite), one file per rule: purchase adds stock; sale subtracts stock; insufficient stock blocks;
   partial payment reduces due; forced failure mid-confirm rolls back bill+stock+balance together; backup -> restore preserves every table.
 - Property tests: random bill sequences keep `item.qty_milli` == sum of movements and `customer.balance` == ledger sum.
