@@ -4,6 +4,8 @@ import { AuthService } from '../../src/application/auth/authService';
 import { UserService } from '../../src/application/auth/userService';
 import { ItemService } from '../../src/application/inventory/itemService';
 import { StockService } from '../../src/application/inventory/stockService';
+import { CustomerService } from '../../src/application/parties/customerService';
+import { SupplierService } from '../../src/application/parties/supplierService';
 import { openDatabase, type Db } from '../../src/infrastructure/db/connection';
 import { loadMigrations, migrate } from '../../src/infrastructure/db/migrate';
 import type { PasswordHasher } from '../../src/infrastructure/security/passwordHasher';
@@ -39,6 +41,8 @@ export interface Harness {
   users: UserService;
   items: ItemService;
   stock: StockService;
+  customers: CustomerService;
+  suppliers: SupplierService;
   ownerToken: string;
 }
 
@@ -59,7 +63,9 @@ export function buildServices(opts: { idleTimeoutMs?: number } = {}): Omit<Harne
   const users = new UserService({ db, auth, hasher: fakeHasher, sessions, clock });
   const items = new ItemService(db, auth, clock);
   const stock = new StockService(db, auth, clock);
-  return { db, clock, sessions, auth, users, items, stock };
+  const customers = new CustomerService(db, auth, clock);
+  const suppliers = new SupplierService(db, auth, clock);
+  return { db, clock, sessions, auth, users, items, stock, customers, suppliers };
 }
 
 /** Services after first-run setup, with the owner signed in. */

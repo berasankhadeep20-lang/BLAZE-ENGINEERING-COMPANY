@@ -3,7 +3,7 @@
 Offline-first desktop application for an Indian milk-testing-equipment and chemical wholesale business:
 purchase and sale bills, stock, customer dues, reports, owner/employee accounts, backup/restore, and A4 tax invoice printing.
 
-**Status:** M0 (scaffold, money/GST engine), M1 (Unit of Work, audit, number series, ledgers, reconciliation) and M2 (accounts, sessions, permissions) and M3 (items, stock corrections, movement history) complete.
+**Status:** M0 (scaffold, money/GST engine), M1 (Unit of Work, audit, number series, ledgers, reconciliation) and M2 (accounts, sessions, permissions) and M3 (items, stock corrections, movement history) and M4 (customers, suppliers, approval, dues, statements) complete.
 There is no application window yet; the first window (login) arrives with the auth milestone.
 
 ## Stack
@@ -33,10 +33,12 @@ npm test        # tests only
 - `src/domain/`: also `permissions` (catalogue, owner-only list, employee defaults) and `password` (input rules)
 - `src/application/auth/`: `AuthService` (first-run setup, sign-in with lockout, sessions, change password, owner recovery code, `authorize`), `UserService` (create/disable/reset employees, set permissions), `SessionStore`
 - `src/application/inventory/`: `ItemService` (create/edit with split permissions, search and filters, categories, CSV export), `StockService` (loss and physical-count corrections, movement history, low-stock list, integrity check)
+- `src/application/parties/`: `CustomerService` (create/edit, owner approval queue, search, dues as of any day, statements, CSV), `SupplierService`, shared validation and statement builder
+- `src/domain/gstin.ts`: GSTIN check digit, Indian state codes, intra/inter-state rule
 - `src/infrastructure/security/`: argon2id password hasher
 - `src/shared/`: typed `AppError` codes, injectable clock
 - `tests/`: unit tests for the domain, integration tests for migrations, the database-enforced rules, atomicity and ledger invariants
-- `docs/adr/`: 0001 money and rounding; 0002 Unit of Work and ledger posting; 0003 accounts, sessions and permissions; 0004 items and stock
+- `docs/adr/`: 0001 money and rounding; 0002 Unit of Work and ledger posting; 0003 accounts, sessions and permissions; 0004 items and stock; 0005 customers and suppliers
 
 ## Data safety
 Never commit real business data, `.mdb`/`.sqlite`/`.blazebak` files, bank or GSTIN details, or the real sample bill.

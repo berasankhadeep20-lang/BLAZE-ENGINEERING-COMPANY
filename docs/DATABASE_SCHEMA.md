@@ -38,6 +38,9 @@ Full DDL: `src/infrastructure/db/migrations/001_initial.sql` (19 tables, 22 trig
 
 - `item.gst_rate_bp` accepts 0 to 10000 (0% to 100%); the app never hard-codes legal tax slabs.
 
+## Migration 002 (M4)
+Unique partial indexes on `customer.gstin` and `supplier.gstin` (blank GSTINs are exempt), plus indexes on customer approval status and phone and on supplier name.
+
 ## Known follow-ups
 - Negative-stock override: not possible in v1 (CHECK constraint); see ADR 0002.
 - Legacy opening balances/stock must be imported as OPENING ledger entries so `reconcile()` stays clean.
