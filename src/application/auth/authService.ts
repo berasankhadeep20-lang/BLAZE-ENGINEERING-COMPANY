@@ -190,6 +190,17 @@ export class AuthService {
     return user;
   }
 
+  /** Like authorize, but passes if the user holds ANY of the listed permissions. */
+  authorizeAny(token: string, permissions: readonly Permission[]): SessionUser {
+    const user = this.getSession(token);
+    if (user.mustChangePassword) throw new AppError('PASSWORD_CHANGE_REQUIRED', 'you must set a new password first');
+    if (user.role === 'OWNER') return user;
+    if (!permissions.some((p) => !isOwnerOnly(p) && user.permissions.includes(p))) {
+      throw new AppError('PERMISSION_DENIED', 'you do not have permission to do this', { anyOf: [...permissions] });
+    }
+    return user;
+  }
+
   async changePassword(token: string, currentPassword: string, newPassword: string): Promise<void> {
     const user = this.getSession(token);
     const row = findUserById(this.db, user.id);

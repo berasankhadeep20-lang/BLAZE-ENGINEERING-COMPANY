@@ -41,6 +41,9 @@ Full DDL: `src/infrastructure/db/migrations/001_initial.sql` (19 tables, 22 trig
 ## Migration 002 (M4)
 Unique partial indexes on `customer.gstin` and `supplier.gstin` (blank GSTINs are exempt), plus indexes on customer approval status and phone and on supplier name.
 
+## Migration 003 (M5)
+`payment_allocation` (payment, bill, amount; append-only): which bills each payment settles. A bill's outstanding = total minus allocations of payments that are not reversed.
+
 ## Known follow-ups
 - Negative-stock override: not possible in v1 (CHECK constraint); see ADR 0002.
 - Legacy opening balances/stock must be imported as OPENING ledger entries so `reconcile()` stays clean.

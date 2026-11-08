@@ -1,7 +1,7 @@
 import type { Db } from './connection';
 
 export interface ReconcileIssue {
-  kind: 'ITEM_QTY' | 'CUSTOMER_BALANCE' | 'SUPPLIER_BALANCE';
+  kind: 'ITEM_QTY' | 'CUSTOMER_BALANCE' | 'SUPPLIER_BALANCE' | 'PAYMENT_OVER_ALLOCATED' | 'BILL_OVER_PAID';
   id: number;
   label: string;
   cached: number;
@@ -44,6 +44,27 @@ export function reconcile(db: Db): ReconcileIssue[] {
         `SELECT s.id AS id, s.name AS label, s.balance_paise AS cached, COALESCE(SUM(l.amount_paise), 0) AS ledger
          FROM supplier s LEFT JOIN supplier_ledger l ON l.supplier_id = s.id
          GROUP BY s.id HAVING cached <> ledger`,
+      )
+      .all() as Row[],
+  );
+  // a payment cannot settle more than it is worth, and a bill cannot be settled for more than its total
+  push(
+    'PAYMENT_OVER_ALLOCATED',
+    db
+      .prepare(
+        `SELECT p.id AS id, p.receipt_no AS label, p.amount_paise AS cached, COALESCE(SUM(a.amount_paise), 0) AS ledger
+         FROM customer_payment p JOIN payment_allocation a ON a.payment_id = p.id
+         GROUP BY p.id HAVING ledger > cached`,
+      )
+      .all() as Row[],
+  );
+  push(
+    'BILL_OVER_PAID',
+    db
+      .prepare(
+        `SELECT b.id AS id, COALESCE(b.bill_no, '') AS label, b.total_paise AS cached, COALESCE(SUM(a.amount_paise), 0) AS ledger
+         FROM sale_bill b JOIN payment_allocation a ON a.sale_bill_id = b.id JOIN customer_payment p ON p.id = a.payment_id AND p.is_reversed = 0
+         GROUP BY b.id HAVING ledger > cached`,
       )
       .all() as Row[],
   );

@@ -9,6 +9,7 @@ export const ERROR_CODES = [
   'INSUFFICIENT_STOCK',
   'OVERPAYMENT',
   'CUSTOMER_NOT_APPROVED',
+  'ACK_REQUIRED', // the user must explicitly acknowledge something (for example a sale below cost) and resubmit
   'CONFLICT',
   'INVARIANT', // a programming error: the code broke a rule it should never break
 ] as const;
