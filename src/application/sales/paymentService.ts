@@ -6,6 +6,7 @@ import { recordAudit } from '../../infrastructure/db/audit';
 import { postCustomerLedger } from '../../infrastructure/db/ledgers';
 import { UnitOfWork } from '../../infrastructure/db/unitOfWork';
 import type { AuthService } from '../auth/authService';
+import { isoDate } from '../common';
 import { assertCustomerUsable } from '../parties/customerService';
 import { readSettings } from '../settings/settingsService';
 import { OUTSTANDING_SQL, recordPaymentTx, type PaymentTxResult } from './paymentOps';
@@ -48,7 +49,6 @@ export interface PaymentFilters {
   offset?: number;
 }
 
-const isoDate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(`${s}T00:00:00Z`).getTime()) && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s);
 
 export class PaymentService {
   private readonly uow: UnitOfWork;

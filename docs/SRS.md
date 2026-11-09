@@ -42,6 +42,7 @@ Out of scope for v1: networking/sync, legacy data import (later phase).
 6. Bank, GSTIN, address come from settings, never hard-coded.
 
 ## 6. Decisions
+- On a sale invoice the current rate per piece is shown first and the user may type the desired rate for that bill (permission `sale.edit_rate`, on by default for employees; `price.edit` is only for the item master). The standard rate is stored beside the rate charged.
 - Purchase bills keep `ordered_qty` and `received_qty`; only received affects stock.
 - Supplier payments are tracked separately from customer receivables.
 - Negative-stock override is off by default; owner-only with mandatory reason if enabled.

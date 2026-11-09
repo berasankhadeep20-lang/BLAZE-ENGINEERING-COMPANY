@@ -1,8 +1,8 @@
 import { financialYear, seriesPrefix } from '../../domain/billNumber';
-import { computeBill, type BillTotals, type LineInput } from '../../domain/gst';
+import { computeBill, type BillTotals, type LineInput, type LineResult } from '../../domain/gst';
 import { taxTypeForSupply } from '../../domain/gstin';
 import { uomLabel } from '../../domain/inventory';
-import { MoneyError, mulDivRound } from '../../domain/money';
+import { mulDivRound } from '../../domain/money';
 import { amountInWords } from '../../domain/words';
 import { localDateString, systemClock, type Clock } from '../../shared/clock';
 import { AppError } from '../../shared/errors';
@@ -13,6 +13,7 @@ import { postCustomerLedger, postStockMovement } from '../../infrastructure/db/l
 import { allocateNumber } from '../../infrastructure/db/numberSeries';
 import { UnitOfWork } from '../../infrastructure/db/unitOfWork';
 import type { AuthService } from '../auth/authService';
+import { clean, isoDate, priced } from '../common';
 import { assertCustomerUsable } from '../parties/customerService';
 import { readSettings, requireBillingSettings, type AppSettings } from '../settings/settingsService';
 import { OUTSTANDING_SQL, recordPaymentTx } from './paymentOps';
@@ -59,6 +60,8 @@ export interface SaleLineDto {
   igstPaise: number;
   totalPaise: number;
   belowCost: boolean;
+  listRatePaise: number; // the item's standard rate when the bill was priced
+  rateChanged: boolean; // true when the rate charged differs from the standard rate
 }
 
 export interface SaleBillDto {
@@ -146,24 +149,6 @@ const ITEM_SELECT = 'SELECT id, code, name, hsn, unit, pack_size, purchase_rate_
 const BILL_SELECT = `SELECT b.*, uc.display_name AS created_by_name, uf.display_name AS confirmed_by_name, ux.display_name AS cancelled_by_name
   FROM sale_bill b LEFT JOIN user uc ON uc.id = b.created_by LEFT JOIN user uf ON uf.id = b.confirmed_by LEFT JOIN user ux ON ux.id = b.cancelled_by`;
 
-const isoDate = (s: string): boolean => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return false;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
-};
-const clean = (s: string | undefined | null): string | null => (s === undefined || s === null || s.trim() === '' ? null : s.trim());
-
-/** The engine throws MoneyError for impossible figures (such as a discount above the line amount); show those as ordinary validation errors. */
-function priced<T>(fn: () => T): T {
-  try {
-    return fn();
-  } catch (e) {
-    if (e instanceof MoneyError) throw new AppError('VALIDATION', e.message);
-    throw e;
-  }
-}
-
 interface ResolvedLine {
   item: ItemRow;
   qtyMilli: number;
@@ -182,79 +167,122 @@ function priceBill(lines: ResolvedLine[], taxType: 'INTRA' | 'INTER', delivery: 
   return { totals, belowCost };
 }
 
+export interface SaleLineQuote {
+  itemId: number;
+  code: string;
+  description: string;
+  hsn: string | null;
+  uomLabel: string;
+  currentRatePaise: number; // the item's current sale rate per piece: show this first
+  gstRateBp: number;
+  availableQtyMilli: number;
+  isActive: boolean;
+  lastRatePaise: number | null; // what this customer was last charged per piece
+  lastSoldOn: string | null;
+  canEditRate: boolean;
+}
+
+export interface SalePreview {
+  taxType: 'INTRA' | 'INTER';
+  lines: SaleLineDto[];
+  totals: SaleBillDto['totals'];
+  belowCostLines: { lineNo: number; itemCode: string }[];
+  shortages: { itemCode: string; availableMilli: number; requestedMilli: number }[]; // informational: confirming will refuse if these remain
+}
+
+interface BuiltDraft {
+  resolved: ResolvedLine[];
+  totals: BillTotals;
+  belowCost: boolean[];
+  taxType: 'INTRA' | 'INTER';
+  cols: Record<string, string | number | null>;
+}
+
+function totalsLine(t: BillTotals, i: number): LineResult {
+  const l = t.lines[i];
+  if (!l) throw new AppError('INVARIANT', 'line totals missing');
+  return l;
+}
+
+function totalsDto(t: BillTotals): SaleBillDto['totals'] {
+  return {
+    goodsTaxablePaise: t.goodsTaxablePaise, taxableTotalPaise: t.taxableTotalPaise, cgstPaise: t.cgstPaise, sgstPaise: t.sgstPaise, igstPaise: t.igstPaise,
+    totalTaxPaise: t.totalTaxPaise, deliveryPaise: t.delivery?.taxablePaise ?? 0, deliveryGstRateBp: t.delivery?.gstRateBp ?? 0,
+    deliveryTaxPaise: t.delivery ? t.delivery.cgstPaise + t.delivery.sgstPaise + t.delivery.igstPaise : 0, roundOffPaise: t.roundOffPaise,
+    totalPaise: t.totalPaise, amountInWords: amountInWords(t.totalPaise),
+  };
+}
+
+function lineDtoFromComputed(l: ResolvedLine, t: LineResult, belowCost: boolean, lineNo: number): SaleLineDto {
+  return {
+    lineNo, itemId: l.item.id, description: l.item.name, hsn: l.item.hsn, qtyMilli: l.qtyMilli, uomLabel: uomLabel(l.item.unit, l.item.pack_size),
+    ratePaise: l.ratePaise, discountPaise: l.discountPaise, taxablePaise: t.taxablePaise, gstRateBp: t.gstRateBp, cgstPaise: t.cgstPaise, sgstPaise: t.sgstPaise,
+    igstPaise: t.igstPaise, totalPaise: t.totalPaise, belowCost, listRatePaise: l.item.sale_rate_paise,
+    rateChanged: l.ratePaise !== l.item.sale_rate_paise || l.discountPaise > 0,
+  };
+}
+
 export class SaleService {
   private readonly uow: UnitOfWork;
 
   constructor(
     private readonly db: Db,
     private readonly auth: AuthService,
-    clock: Clock = systemClock,
+    private readonly clock: Clock = systemClock,
   ) {
     this.uow = new UnitOfWork(db, clock);
   }
 
   // ------------------------------------------------------------------ drafts
+  /**
+   * What the invoice screen shows when a line is added: the item's CURRENT rate per piece (shown first, for the user to edit for this bill),
+   * the stock on hand, and what this customer was last charged for it. `canEditRate` tells the screen whether the rate field may be changed.
+   */
+  quoteLine(token: string, input: { itemId: number; customerId?: number }): SaleLineQuote {
+    const user = this.auth.authorize(token, 'sale.create');
+    const item = this.db.prepare(ITEM_SELECT).get(input.itemId) as ItemRow | undefined;
+    if (!item) throw new AppError('NOT_FOUND', 'item not found');
+    const last =
+      input.customerId === undefined
+        ? undefined
+        : (this.db
+            .prepare(`SELECT l.rate_paise AS rate, b.invoice_date AS date FROM sale_bill_line l JOIN sale_bill b ON b.id = l.bill_id
+                      WHERE b.customer_id = ? AND l.item_id = ? AND b.status = 'CONFIRMED' ORDER BY b.id DESC LIMIT 1`)
+            .get(input.customerId, input.itemId) as { rate: number; date: string } | undefined);
+    return {
+      itemId: item.id, code: item.code, description: item.name, hsn: item.hsn, uomLabel: uomLabel(item.unit, item.pack_size),
+      currentRatePaise: item.sale_rate_paise, gstRateBp: item.gst_rate_bp, availableQtyMilli: item.qty_milli, isActive: item.is_active === 1,
+      lastRatePaise: last?.rate ?? null, lastSoldOn: last?.date ?? null,
+      canEditRate: user.role === 'OWNER' || user.permissions.includes('sale.edit_rate'),
+    };
+  }
+
+  /** Price a bill exactly as saving would, without saving anything: lets the screen show live totals while the user edits rates and quantities. */
+  preview(token: string, input: SaleDraftInput): SalePreview {
+    this.auth.authorize(token, 'sale.create');
+    const d = this.buildDraft(this.db, token, input, this.clock.now().toISOString());
+    const need = new Map<number, number>();
+    for (const l of d.resolved) need.set(l.item.id, (need.get(l.item.id) ?? 0) + l.qtyMilli);
+    const shortages = [...need.entries()].flatMap(([itemId, requested]) => {
+      const row = this.db.prepare('SELECT code, qty_milli FROM item WHERE id = ?').get(itemId) as { code: string; qty_milli: number };
+      return row.qty_milli < requested ? [{ itemCode: row.code, availableMilli: row.qty_milli, requestedMilli: requested }] : [];
+    });
+    return {
+      taxType: d.taxType,
+      lines: d.resolved.map((l, i) => lineDtoFromComputed(l, totalsLine(d.totals, i), d.belowCost[i] ?? false, i + 1)),
+      totals: totalsDto(d.totals),
+      belowCostLines: d.resolved.flatMap((l, i) => (d.belowCost[i] ? [{ lineNo: i + 1, itemCode: l.item.code }] : [])),
+      shortages,
+    };
+  }
+
   /** Create or update a draft. Nothing here touches stock, balances or the invoice number. */
   saveDraft(token: string, input: SaleDraftInput): SaleBillDto {
     const user = this.auth.authorize(token, 'sale.create');
     return this.uow.run(this.auth.actorFor(user), (ctx) => {
-      const settings = readSettings(ctx.db);
-      const today = localDateString(new Date(ctx.now));
-      const p = new Problems();
-      p.require(isoDate(input.invoiceDate), 'invoice date must be a valid date');
-      p.require(!isoDate(input.invoiceDate) || input.invoiceDate <= today, 'invoice date cannot be in the future');
-      for (const [label, v] of [['order date', input.orderDate], ['date of supply', input.supplyDate]] as const) p.require(!v || isoDate(v), `${label} must be a valid date`);
-      p.require(input.lines.length >= 1, 'add at least one item');
-      p.require(input.lines.length <= 100, 'a bill can have at most 100 lines');
-      for (const [i, l] of input.lines.entries()) {
-        p.require(Number.isSafeInteger(l.qtyMilli) && l.qtyMilli > 0, `line ${String(i + 1)}: quantity must be more than zero`);
-        if (l.ratePaise !== undefined) p.require(Number.isSafeInteger(l.ratePaise) && l.ratePaise >= 0, `line ${String(i + 1)}: rate cannot be negative`);
-        if (l.discountPaise !== undefined) p.require(Number.isSafeInteger(l.discountPaise) && l.discountPaise >= 0, `line ${String(i + 1)}: discount cannot be negative`);
-      }
-      const d = input.delivery;
-      if (d) {
-        p.require(Number.isSafeInteger(d.amountPaise) && d.amountPaise >= 0, 'delivery charge cannot be negative');
-        p.require(Number.isSafeInteger(d.gstRateBp) && d.gstRateBp >= 0 && d.gstRateBp <= 10000, 'delivery GST rate must be between 0% and 100%');
-      }
-      const received = input.receivedPaise ?? 0;
-      p.require(Number.isSafeInteger(received) && received >= 0, 'amount received cannot be negative');
-      for (const [label, v, max] of [['order number', input.orderNo, 40], ['transport mode', input.transportMode, 40], ['vehicle number', input.vehicleNo, 20], ['place of supply', input.placeOfSupply, 80], ['notes', input.notes, 500]] as const) {
-        p.require((v?.trim().length ?? 0) <= max, `${label} is too long (${String(max)} characters at most)`);
-      }
-      p.throwIfAny();
-
-      assertCustomerUsable(ctx.db, input.customerId, 'DRAFT');
-      const customer = ctx.db.prepare('SELECT name, address, gstin, state, place_of_supply FROM customer WHERE id = ?').get(input.customerId) as {
-        name: string; address: string | null; gstin: string | null; state: string | null; place_of_supply: string | null;
-      };
-
-      const resolved: ResolvedLine[] = input.lines.map((l, i) => {
-        const item = ctx.db.prepare(ITEM_SELECT).get(l.itemId) as ItemRow | undefined;
-        if (!item) throw new AppError('NOT_FOUND', `line ${String(i + 1)}: item not found`);
-        if (item.is_active !== 1) throw new AppError('VALIDATION', `line ${String(i + 1)}: item ${item.code} is inactive and cannot be sold`);
-        const rate = l.ratePaise ?? item.sale_rate_paise;
-        const discount = l.discountPaise ?? 0;
-        // selling at any price other than the item's rate, or giving a discount, is a price decision
-        if (rate !== item.sale_rate_paise || discount > 0) this.auth.authorize(token, 'price.edit');
-        return { item, qtyMilli: l.qtyMilli, ratePaise: rate, discountPaise: discount };
-      });
-
-      const taxType = settings.businessState && customer.state ? taxTypeForSupply(settings.businessState, customer.state) : 'INTRA';
-      const { totals, belowCost } = priceBill(resolved, taxType, d, settings);
-      if (received > totals.totalPaise) throw new AppError('VALIDATION', 'the amount received is more than the bill total');
-      const method = received > 0 ? this.checkMethod(settings, input.paymentMethod) : null;
-
-      const cols = {
-        invoice_date: input.invoiceDate, order_no: clean(input.orderNo), order_date: clean(input.orderDate), transport_mode: clean(input.transportMode),
-        vehicle_no: clean(input.vehicleNo), supply_date: clean(input.supplyDate), place_of_supply: clean(input.placeOfSupply) ?? customer.place_of_supply,
-        customer_id: input.customerId, cust_name: customer.name, cust_address: customer.address, cust_gstin: customer.gstin, cust_state: customer.state,
-        tax_type: taxType, taxable_paise: totals.taxableTotalPaise, cgst_paise: totals.cgstPaise, sgst_paise: totals.sgstPaise, igst_paise: totals.igstPaise,
-        delivery_paise: d?.amountPaise ?? 0, delivery_gst_rate_bp: d?.gstRateBp ?? 0, delivery_tax_paise: totals.delivery ? totals.delivery.cgstPaise + totals.delivery.sgstPaise + totals.delivery.igstPaise : 0,
-        round_off_paise: totals.roundOffPaise, total_paise: totals.totalPaise, received_paise: received,
-        payment_method: method, notes: clean(input.notes),
-      };
-      const names = Object.keys(cols);
-      const values = Object.values(cols) as (string | number | null)[];
+      const d = this.buildDraft(ctx.db, token, input, ctx.now);
+      const names = Object.keys(d.cols);
+      const values = Object.values(d.cols) as (string | number | null)[];
 
       let billId: number;
       if (input.id !== undefined) {
@@ -271,10 +299,70 @@ export class SaleService {
             .run(...values, user.id, ctx.now).lastInsertRowid,
         );
       }
-      this.insertLines(ctx.db, billId, resolved, totals, belowCost);
-      recordAudit(ctx, { action: 'SALE_SAVE_DRAFT', entityType: 'sale_bill', entityId: billId, detail: { customerId: input.customerId, lines: resolved.length, totalPaise: totals.totalPaise } });
+      this.insertLines(ctx.db, billId, d.resolved, d.totals, d.belowCost);
+      recordAudit(ctx, { action: 'SALE_SAVE_DRAFT', entityType: 'sale_bill', entityId: billId, detail: { customerId: input.customerId, lines: d.resolved.length, totalPaise: d.totals.totalPaise } });
       return this.loadBill(ctx.db, billId);
     });
+  }
+
+  /** Validate and price a draft (shared by saveDraft and preview). Reads only. */
+  private buildDraft(db: Db, token: string, input: SaleDraftInput, nowIso: string): BuiltDraft {
+    const settings = readSettings(db);
+    const today = localDateString(new Date(nowIso));
+    const p = new Problems();
+    p.require(isoDate(input.invoiceDate), 'invoice date must be a valid date');
+    p.require(!isoDate(input.invoiceDate) || input.invoiceDate <= today, 'invoice date cannot be in the future');
+    for (const [label, v] of [['order date', input.orderDate], ['date of supply', input.supplyDate]] as const) p.require(!v || isoDate(v), `${label} must be a valid date`);
+    p.require(input.lines.length >= 1, 'add at least one item');
+    p.require(input.lines.length <= 100, 'a bill can have at most 100 lines');
+    for (const [i, l] of input.lines.entries()) {
+      p.require(Number.isSafeInteger(l.qtyMilli) && l.qtyMilli > 0, `line ${String(i + 1)}: quantity must be more than zero`);
+      if (l.ratePaise !== undefined) p.require(Number.isSafeInteger(l.ratePaise) && l.ratePaise >= 0, `line ${String(i + 1)}: rate cannot be negative`);
+      if (l.discountPaise !== undefined) p.require(Number.isSafeInteger(l.discountPaise) && l.discountPaise >= 0, `line ${String(i + 1)}: discount cannot be negative`);
+    }
+    const dl = input.delivery;
+    if (dl) {
+      p.require(Number.isSafeInteger(dl.amountPaise) && dl.amountPaise >= 0, 'delivery charge cannot be negative');
+      p.require(Number.isSafeInteger(dl.gstRateBp) && dl.gstRateBp >= 0 && dl.gstRateBp <= 10000, 'delivery GST rate must be between 0% and 100%');
+    }
+    const received = input.receivedPaise ?? 0;
+    p.require(Number.isSafeInteger(received) && received >= 0, 'amount received cannot be negative');
+    for (const [label, v, max] of [['order number', input.orderNo, 40], ['transport mode', input.transportMode, 40], ['vehicle number', input.vehicleNo, 20], ['place of supply', input.placeOfSupply, 80], ['notes', input.notes, 500]] as const) {
+      p.require((v?.trim().length ?? 0) <= max, `${label} is too long (${String(max)} characters at most)`);
+    }
+    p.throwIfAny();
+
+    assertCustomerUsable(db, input.customerId, 'DRAFT');
+    const customer = db.prepare('SELECT name, address, gstin, state, place_of_supply FROM customer WHERE id = ?').get(input.customerId) as {
+      name: string; address: string | null; gstin: string | null; state: string | null; place_of_supply: string | null;
+    };
+
+    const resolved: ResolvedLine[] = input.lines.map((l, i) => {
+      const item = db.prepare(ITEM_SELECT).get(l.itemId) as ItemRow | undefined;
+      if (!item) throw new AppError('NOT_FOUND', `line ${String(i + 1)}: item not found`);
+      if (item.is_active !== 1) throw new AppError('VALIDATION', `line ${String(i + 1)}: item ${item.code} is inactive and cannot be sold`);
+      // the rate shown first is the item's current rate; typing a different rate (or giving a discount) is a per-bill price decision
+      const rate = l.ratePaise ?? item.sale_rate_paise;
+      const discount = l.discountPaise ?? 0;
+      if (rate !== item.sale_rate_paise || discount > 0) this.auth.authorize(token, 'sale.edit_rate');
+      return { item, qtyMilli: l.qtyMilli, ratePaise: rate, discountPaise: discount };
+    });
+
+    const taxType = settings.businessState && customer.state ? taxTypeForSupply(settings.businessState, customer.state) : 'INTRA';
+    const { totals, belowCost } = priceBill(resolved, taxType, dl, settings);
+    if (received > totals.totalPaise) throw new AppError('VALIDATION', 'the amount received is more than the bill total');
+    const method = received > 0 ? this.checkMethod(settings, input.paymentMethod) : null;
+
+    const cols = {
+      invoice_date: input.invoiceDate, order_no: clean(input.orderNo), order_date: clean(input.orderDate), transport_mode: clean(input.transportMode),
+      vehicle_no: clean(input.vehicleNo), supply_date: clean(input.supplyDate), place_of_supply: clean(input.placeOfSupply) ?? customer.place_of_supply,
+      customer_id: input.customerId, cust_name: customer.name, cust_address: customer.address, cust_gstin: customer.gstin, cust_state: customer.state,
+      tax_type: taxType, taxable_paise: totals.taxableTotalPaise, cgst_paise: totals.cgstPaise, sgst_paise: totals.sgstPaise, igst_paise: totals.igstPaise,
+      delivery_paise: dl?.amountPaise ?? 0, delivery_gst_rate_bp: dl?.gstRateBp ?? 0, delivery_tax_paise: totals.delivery ? totals.delivery.cgstPaise + totals.delivery.sgstPaise + totals.delivery.igstPaise : 0,
+      round_off_paise: totals.roundOffPaise, total_paise: totals.totalPaise, received_paise: received,
+      payment_method: method, notes: clean(input.notes),
+    };
+    return { resolved, totals, belowCost, taxType, cols };
   }
 
   deleteDraft(token: string, billId: number): void {
@@ -352,12 +440,12 @@ export class SaleService {
       // lines first (still a draft), then stock, dues, and finally the status change that freezes the bill
       const upd = ctx.db.prepare(
         `UPDATE sale_bill_line SET description = ?, hsn = ?, uom_label = ?, rate_paise = ?, discount_paise = ?, taxable_paise = ?, gst_rate_bp = ?,
-           cgst_paise = ?, sgst_paise = ?, igst_paise = ?, total_paise = ?, below_cost = ? WHERE bill_id = ? AND line_no = ?`,
+           cgst_paise = ?, sgst_paise = ?, igst_paise = ?, total_paise = ?, below_cost = ?, list_rate_paise = ? WHERE bill_id = ? AND line_no = ?`,
       );
       resolved.forEach((l, i) => {
         const t = totals.lines[i];
         if (!t) throw new AppError('INVARIANT', 'line totals missing');
-        upd.run(l.item.name, l.item.hsn, uomLabel(l.item.unit, l.item.pack_size), l.ratePaise, l.discountPaise, t.taxablePaise, t.gstRateBp, t.cgstPaise, t.sgstPaise, t.igstPaise, t.totalPaise, belowCost[i] ? 1 : 0, billId, lineRows[i]?.line_no ?? i + 1);
+        upd.run(l.item.name, l.item.hsn, uomLabel(l.item.unit, l.item.pack_size), l.ratePaise, l.discountPaise, t.taxablePaise, t.gstRateBp, t.cgstPaise, t.sgstPaise, t.igstPaise, t.totalPaise, belowCost[i] ? 1 : 0, l.item.sale_rate_paise, billId, lineRows[i]?.line_no ?? i + 1);
       });
       for (const l of resolved) {
         postStockMovement(ctx, { itemId: l.item.id, qtyDeltaMilli: -l.qtyMilli, reason: 'SALE', refType: 'sale_bill', refId: billId, refNo: billNo });
@@ -385,7 +473,7 @@ export class SaleService {
       }
 
       if (belowLines.length) recordAudit(ctx, { action: 'BELOW_COST_ACK', entityType: 'sale_bill', entityId: billId, detail: { billNo, lines: belowLines, warned: settings.warnBelowCost } });
-      recordAudit(ctx, { action: 'SALE_CONFIRM', entityType: 'sale_bill', entityId: billId, detail: { billNo, customerId: bill.customer_id, totalPaise: totals.totalPaise, receivedPaise: received, receiptNo: receipt } });
+      recordAudit(ctx, { action: 'SALE_CONFIRM', entityType: 'sale_bill', entityId: billId, detail: { billNo, customerId: bill.customer_id, totalPaise: totals.totalPaise, receivedPaise: received, receiptNo: receipt, linesAtChangedRate: resolved.filter((l) => l.ratePaise !== l.item.sale_rate_paise || l.discountPaise > 0).length } });
       return this.loadBill(ctx.db, billId);
     });
   }
@@ -489,13 +577,13 @@ export class SaleService {
   private insertLines(db: Db, billId: number, lines: ResolvedLine[], totals: BillTotals, belowCost: boolean[]): void {
     const ins = db.prepare(
       `INSERT INTO sale_bill_line (bill_id, line_no, item_id, description, hsn, qty_milli, uom_label, rate_paise, discount_paise, taxable_paise,
-         gst_rate_bp, cgst_paise, sgst_paise, igst_paise, total_paise, below_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         gst_rate_bp, cgst_paise, sgst_paise, igst_paise, total_paise, below_cost, list_rate_paise) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     lines.forEach((l, i) => {
       const t = totals.lines[i];
       if (!t) throw new AppError('INVARIANT', 'line totals missing');
       ins.run(billId, i + 1, l.item.id, l.item.name, l.item.hsn, l.qtyMilli, uomLabel(l.item.unit, l.item.pack_size), l.ratePaise, l.discountPaise,
-        t.taxablePaise, t.gstRateBp, t.cgstPaise, t.sgstPaise, t.igstPaise, t.totalPaise, belowCost[i] ? 1 : 0);
+        t.taxablePaise, t.gstRateBp, t.cgstPaise, t.sgstPaise, t.igstPaise, t.totalPaise, belowCost[i] ? 1 : 0, l.item.sale_rate_paise);
     });
   }
 
@@ -503,10 +591,10 @@ export class SaleService {
     const b = db.prepare(`${BILL_SELECT} WHERE b.id = ?`).get(billId) as BillRow | undefined;
     if (!b) throw new AppError('NOT_FOUND', 'bill not found');
     const lines = db
-      .prepare('SELECT line_no, item_id, description, hsn, qty_milli, uom_label, rate_paise, discount_paise, taxable_paise, gst_rate_bp, cgst_paise, sgst_paise, igst_paise, total_paise, below_cost FROM sale_bill_line WHERE bill_id = ? ORDER BY line_no')
+      .prepare('SELECT line_no, item_id, description, hsn, qty_milli, uom_label, rate_paise, discount_paise, taxable_paise, gst_rate_bp, cgst_paise, sgst_paise, igst_paise, total_paise, below_cost, list_rate_paise FROM sale_bill_line WHERE bill_id = ? ORDER BY line_no')
       .all(billId) as {
         line_no: number; item_id: number; description: string; hsn: string | null; qty_milli: number; uom_label: string; rate_paise: number; discount_paise: number;
-        taxable_paise: number; gst_rate_bp: number; cgst_paise: number; sgst_paise: number; igst_paise: number; total_paise: number; below_cost: number;
+        taxable_paise: number; gst_rate_bp: number; cgst_paise: number; sgst_paise: number; igst_paise: number; total_paise: number; below_cost: number; list_rate_paise: number | null;
       }[];
     const payments = db
       .prepare(`SELECT p.receipt_no, p.paid_on, p.method, a.amount_paise, p.is_reversed FROM payment_allocation a JOIN customer_payment p ON p.id = a.payment_id WHERE a.sale_bill_id = ? ORDER BY p.id`)
@@ -522,6 +610,7 @@ export class SaleService {
         lineNo: l.line_no, itemId: l.item_id, description: l.description, hsn: l.hsn, qtyMilli: l.qty_milli, uomLabel: l.uom_label, ratePaise: l.rate_paise,
         discountPaise: l.discount_paise, taxablePaise: l.taxable_paise, gstRateBp: l.gst_rate_bp, cgstPaise: l.cgst_paise, sgstPaise: l.sgst_paise,
         igstPaise: l.igst_paise, totalPaise: l.total_paise, belowCost: l.below_cost === 1,
+        listRatePaise: l.list_rate_paise ?? l.rate_paise, rateChanged: l.list_rate_paise !== null && (l.list_rate_paise !== l.rate_paise || l.discount_paise > 0),
       })),
       totals: {
         goodsTaxablePaise: b.taxable_paise - b.delivery_paise, taxableTotalPaise: b.taxable_paise, cgstPaise: b.cgst_paise, sgstPaise: b.sgst_paise, igstPaise: b.igst_paise,

@@ -18,7 +18,7 @@ describe('settings', () => {
   it('has no invented business details: name, state and invoice prefix start empty', async () => {
     const h = await setupHarness();
     const s = h.settings.get(h.ownerToken);
-    expect(s).toMatchObject({ businessName: null, businessState: null, invoicePrefix: null, invoiceNumberWidth: 4, roundOff: 'NEAREST_RUPEE', warnBelowCost: true, paymentMethods: DEFAULT_PAYMENT_METHODS });
+    expect(s).toMatchObject({ businessName: null, businessState: null, invoicePrefix: null, invoiceNumberWidth: 4, purchasePrefix: 'PB', supplierReceiptPrefix: 'SP', roundOff: 'NEAREST_RUPEE', warnBelowCost: true, paymentMethods: DEFAULT_PAYMENT_METHODS });
     expect(codeOf(() => requireBillingSettings(s))).toBe('VALIDATION');
   });
 

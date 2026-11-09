@@ -6,6 +6,8 @@ import { ItemService } from '../../src/application/inventory/itemService';
 import { StockService } from '../../src/application/inventory/stockService';
 import { CustomerService } from '../../src/application/parties/customerService';
 import { SupplierService } from '../../src/application/parties/supplierService';
+import { PurchaseService } from '../../src/application/purchases/purchaseService';
+import { SupplierPaymentService } from '../../src/application/purchases/supplierPaymentService';
 import { PaymentService } from '../../src/application/sales/paymentService';
 import { SaleService } from '../../src/application/sales/saleService';
 import { SettingsService } from '../../src/application/settings/settingsService';
@@ -48,6 +50,8 @@ export interface Harness {
   suppliers: SupplierService;
   sales: SaleService;
   payments: PaymentService;
+  purchases: PurchaseService;
+  supplierPayments: SupplierPaymentService;
   settings: SettingsService;
   ownerToken: string;
 }
@@ -73,8 +77,10 @@ export function buildServices(opts: { idleTimeoutMs?: number } = {}): Omit<Harne
   const suppliers = new SupplierService(db, auth, clock);
   const sales = new SaleService(db, auth, clock);
   const payments = new PaymentService(db, auth, clock);
+  const purchases = new PurchaseService(db, auth, clock);
+  const supplierPayments = new SupplierPaymentService(db, auth, clock);
   const settings = new SettingsService(db, auth, clock);
-  return { db, clock, sessions, auth, users, items, stock, customers, suppliers, sales, payments, settings };
+  return { db, clock, sessions, auth, users, items, stock, customers, suppliers, sales, payments, purchases, supplierPayments, settings };
 }
 
 /** Services after first-run setup, with the owner signed in. */

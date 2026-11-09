@@ -1,7 +1,7 @@
 import type { Db } from './connection';
 
 export interface ReconcileIssue {
-  kind: 'ITEM_QTY' | 'CUSTOMER_BALANCE' | 'SUPPLIER_BALANCE' | 'PAYMENT_OVER_ALLOCATED' | 'BILL_OVER_PAID';
+  kind: 'ITEM_QTY' | 'CUSTOMER_BALANCE' | 'SUPPLIER_BALANCE' | 'PAYMENT_OVER_ALLOCATED' | 'BILL_OVER_PAID' | 'PURCHASE_OVER_RECEIVED';
   id: number;
   label: string;
   cached: number;
@@ -65,6 +65,17 @@ export function reconcile(db: Db): ReconcileIssue[] {
         `SELECT b.id AS id, COALESCE(b.bill_no, '') AS label, b.total_paise AS cached, COALESCE(SUM(a.amount_paise), 0) AS ledger
          FROM sale_bill b JOIN payment_allocation a ON a.sale_bill_id = b.id JOIN customer_payment p ON p.id = a.payment_id AND p.is_reversed = 0
          GROUP BY b.id HAVING ledger > cached`,
+      )
+      .all() as Row[],
+  );
+  // goods cannot be received for more than was invoiced
+  push(
+    'PURCHASE_OVER_RECEIVED',
+    db
+      .prepare(
+        `SELECT l.id AS id, COALESCE(b.bill_no, '') || ' line ' || l.line_no AS label, l.ordered_qty_milli AS cached, COALESCE(SUM(r.qty_milli), 0) AS ledger
+         FROM purchase_bill_line l JOIN purchase_bill b ON b.id = l.bill_id JOIN purchase_receipt r ON r.bill_id = l.bill_id AND r.line_no = l.line_no
+         WHERE b.status = 'CONFIRMED' GROUP BY l.id HAVING ledger > cached`,
       )
       .all() as Row[],
   );

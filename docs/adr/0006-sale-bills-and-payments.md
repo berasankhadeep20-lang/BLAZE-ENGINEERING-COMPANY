@@ -32,7 +32,7 @@ allocation); audit. If any step fails, nothing is saved and the invoice number i
 - Payment methods are the list in Settings (default Cash, UPI, Cheque, Bank transfer, Card); whatever is typed is stored in the Settings spelling.
 
 ## Not in this milestone
-Partial returns / credit notes (cancel and re-issue instead), printing and PDF (M8), purchase bills (M7), and the full settings screen (M10: address, bank details, terms, logo, copy labels).
+Partial returns / credit notes (cancel and re-issue instead), printing and PDF (M7), purchase bills (done in M6, ADR 0007), and the full settings screen (M10: address, bank details, terms, logo, copy labels).
 
 ## Integrity
 `checkIntegrity` now also flags a payment allocated for more than its amount and a bill allocated for more than its total.

@@ -14,8 +14,8 @@
 - **Roles:** OWNER (holds every permission) and EMPLOYEE (holds only what the owner switches on).
 - **Owner-only permissions** that can never be granted: `user.manage`, `customer.approve`, `settings.edit`. Granting them would let an employee escalate their own privileges,
   approve their own customers, or alter tax/bank/invoice details. This is a deliberate narrowing of "owner-configurable" in the spec; all other sensitive actions are grantable.
-- **Employee defaults:** `inventory.view`, `customer.view`, `customer.create`, `supplier.view`, `sale.create`, `purchase.create`, `payment.record`.
-  Off by default: `price.edit`, `item.create/edit`, `stock.adjust`, `customer.edit`, `supplier.edit`, `bill.cancel`, `payment.reverse`, `report.view`, `audit.view`, `backup.create`, `backup.restore`.
+- **Employee defaults:** `inventory.view`, `customer.view`, `customer.create`, `supplier.view`, `sale.create`, `sale.edit_rate`, `purchase.create`, `payment.record`.
+  Off by default: `price.edit` (the item's own price), `item.create/edit`, `supplier.pay`, `stock.adjust`, `customer.edit`, `supplier.edit`, `bill.cancel`, `payment.reverse`, `report.view`, `audit.view`, `backup.create`, `backup.restore`.
 - **"Editing confirmed records"** is not an operation in this app (confirmed bills are immutable). The way to correct one is cancel/return (`bill.cancel`) and issue a new bill, so that permission is the control.
 - **The owner account** cannot be disabled, reset or have permissions changed through user management. There is exactly one owner in v1.
 - **Forgotten owner password:** at first run the app shows a one-time **recovery code** (25 symbols, 125 bits) that the owner must save (print it or write it down; keep it off the shop PC).

@@ -28,7 +28,7 @@ describe('migration runner', () => {
   it('applies the real migrations and records them', () => {
     const db = memDb();
     const applied = migrate(db, loadMigrations(REAL_DIR));
-    expect(applied).toEqual([1, 2, 3]);
+    expect(applied).toEqual([1, 2, 3, 4]);
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
     const names = tables.map((t) => t.name);
     for (const t of ['item', 'customer', 'sale_bill', 'purchase_bill', 'stock_movement', 'customer_ledger', 'audit_log', 'schema_migrations']) {

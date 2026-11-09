@@ -117,19 +117,6 @@ describe('drafts', () => {
     expect(codeOf(() => mk('2026-10-01'))).toBe('NO_ERROR');
   });
 
-  it('an employee sells at the item rate; any other rate or any discount needs price.edit', async () => {
-    const h = await shopHarness();
-    const clerk = await makeEmployee(h, 'clerk', ['sale.create']);
-    const mk = (line: { ratePaise?: number; discountPaise?: number }): unknown =>
-      h.sales.saveDraft(clerk, { customerId: h.ids.farm, invoiceDate: '2026-11-01', lines: [{ itemId: h.ids.can, qtyMilli: 1000, ...line }] });
-    expect(codeOf(() => mk({}))).toBe('NO_ERROR');
-    expect(codeOf(() => mk({ ratePaise: 92500 }))).toBe('NO_ERROR'); // same as the item rate
-    expect(codeOf(() => mk({ ratePaise: 90000 }))).toBe('PERMISSION_DENIED');
-    expect(codeOf(() => mk({ discountPaise: 100 }))).toBe('PERMISSION_DENIED');
-    const trusted = await makeEmployee(h, 'trusted', ['sale.create', 'price.edit']);
-    expect(codeOf(() => h.sales.saveDraft(trusted, { customerId: h.ids.farm, invoiceDate: '2026-11-01', lines: [{ itemId: h.ids.can, qtyMilli: 1000, discountPaise: 100 }] }))).toBe('NO_ERROR');
-  });
-
   it('needs sale.create to save or confirm, and one of sale.create / customer.view / report.view to look', async () => {
     const h = await shopHarness();
     const viewer = await makeEmployee(h, 'viewer', ['customer.view']);
@@ -249,6 +236,87 @@ describe('confirming', () => {
     expect(codeOf(() => h.sales.deleteDraft(h.ownerToken, q.id))).toBe('CONFLICT');
     expect(codeOf(() => h.sales.confirm(h.ownerToken, q.id))).toBe('CONFLICT');
     expect(() => h.db.prepare('UPDATE sale_bill SET total_paise = 1 WHERE id = ?').run(q.id)).toThrow(/cannot be edited/);
+  });
+});
+
+describe('typing the rate per piece on an invoice', () => {
+  const draft = (h: Shop, token: string, line: object): { id: number; lines: { ratePaise: number; listRatePaise: number; rateChanged: boolean }[] } =>
+    h.sales.saveDraft(token, { customerId: h.ids.farm, invoiceDate: '2026-11-01', lines: [{ itemId: h.ids.can, qtyMilli: 2000, ...line }] });
+
+  it('shows the item\'s current rate first, plus what this customer was last charged, and whether the rate field may be edited', async () => {
+    const h = await shopHarness();
+    const q1 = h.sales.quoteLine(h.ownerToken, { itemId: h.ids.can, customerId: h.ids.farm });
+    expect(q1).toMatchObject({ code: 'MC-40', description: 'PLASTIC MILK CAN', uomLabel: '40 - LTR', currentRatePaise: 92500, gstRateBp: 1800, availableQtyMilli: 10000, lastRatePaise: null, lastSoldOn: null, canEditRate: true });
+    expect(JSON.stringify(q1)).not.toContain('80000'); // the cost price is never shown on the invoice screen
+    h.sales.confirm(h.ownerToken, draft(h, h.ownerToken, { ratePaise: 90000 }).id);
+    h.items.update(h.ownerToken, h.ids.can, { saleRatePaise: 95000 });
+    expect(h.sales.quoteLine(h.ownerToken, { itemId: h.ids.can, customerId: h.ids.farm })).toMatchObject({ currentRatePaise: 95000, lastRatePaise: 90000, lastSoldOn: '2026-11-01' });
+    expect(h.sales.quoteLine(h.ownerToken, { itemId: h.ids.can })).toMatchObject({ currentRatePaise: 95000, lastRatePaise: null });
+    expect(codeOf(() => h.sales.quoteLine(h.ownerToken, { itemId: 999 }))).toBe('NOT_FOUND');
+  });
+
+  it('the user can type any rate per piece for this bill; the bill remembers the standard rate beside it', async () => {
+    const h = await shopHarness();
+    const bill = h.sales.confirm(h.ownerToken, h.sales.saveDraft(h.ownerToken, {
+      customerId: h.ids.farm, invoiceDate: '2026-11-01',
+      lines: [{ itemId: h.ids.can, qtyMilli: 2000, ratePaise: 90000 }, { itemId: h.ids.buty, qtyMilli: 2000 }],
+    }).id);
+    expect(bill.lines.map((l) => [l.ratePaise, l.listRatePaise, l.rateChanged, l.taxablePaise])).toEqual([[90000, 92500, true, 180000], [5500, 5500, false, 11000]]);
+    expect(h.items.get(h.ownerToken, h.ids.can).saleRatePaise).toBe(92500); // the item's own price is untouched
+    const audit = h.db.prepare("SELECT detail_json FROM audit_log WHERE action = 'SALE_CONFIRM'").get() as { detail_json: string };
+    expect(JSON.parse(audit.detail_json).linesAtChangedRate).toBe(1);
+  });
+
+  it('keeps the typed rate if the item\'s standard rate changes before the bill is issued, but records the standard rate in force at issue', async () => {
+    const h = await shopHarness();
+    const d = draft(h, h.ownerToken, { ratePaise: 90000 });
+    h.items.update(h.ownerToken, h.ids.can, { saleRatePaise: 99000 });
+    const bill = h.sales.confirm(h.ownerToken, d.id);
+    expect(bill.lines[0]).toMatchObject({ ratePaise: 90000, listRatePaise: 99000, rateChanged: true });
+  });
+
+  it('previews the totals while the user edits, without saving anything', async () => {
+    const h = await shopHarness();
+    const input = { customerId: h.ids.farm, invoiceDate: '2026-11-01', lines: [{ itemId: h.ids.can, qtyMilli: 2000, ratePaise: 90000 }, { itemId: h.ids.naoh, qtyMilli: 60000 }], delivery: { amountPaise: 5000, gstRateBp: 1800 } };
+    const pre = h.sales.preview(h.ownerToken, input);
+    expect(count(h, 'SELECT COUNT(*) AS n FROM sale_bill')).toBe(0);
+    expect(count(h, "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'SALE_SAVE_DRAFT'")).toBe(0);
+    expect(pre.lines.map((l) => [l.ratePaise, l.listRatePaise, l.rateChanged])).toEqual([[90000, 92500, true], [24500, 24500, false]]);
+    expect(pre.shortages).toEqual([{ itemCode: 'NAOH-500', availableMilli: 50000, requestedMilli: 60000 }]); // a warning now, rather than a surprise at confirm
+    // the preview agrees to the paisa with what saving then computes
+    const saved = h.sales.saveDraft(h.ownerToken, { ...input, lines: [input.lines[0] ?? { itemId: h.ids.can, qtyMilli: 2000 }] });
+    const again = h.sales.preview(h.ownerToken, { ...input, lines: [input.lines[0] ?? { itemId: h.ids.can, qtyMilli: 2000 }] });
+    expect(again.totals).toEqual(saved.totals);
+    expect(again.lines).toEqual(saved.lines);
+  });
+
+  it('flags a line priced below cost in the preview without revealing the cost', async () => {
+    const h = await shopHarness();
+    const pre = h.sales.preview(h.ownerToken, { customerId: h.ids.farm, invoiceDate: '2026-11-01', lines: [{ itemId: h.ids.can, qtyMilli: 1000, ratePaise: 70000 }] });
+    expect(pre.belowCostLines).toEqual([{ lineNo: 1, itemCode: 'MC-40' }]);
+    expect(pre.lines[0]?.belowCost).toBe(true);
+    expect(JSON.stringify(pre)).not.toContain('80000');
+  });
+
+  it('is on by default for employees; an employee without sale.edit_rate sells at the shown rate only', async () => {
+    const h = await shopHarness();
+    const id = await h.users.createEmployee(h.ownerToken, { username: 'default.clerk', displayName: 'Default', temporaryPassword: 'temp-pass-123' }); // default permissions
+    expect(h.users.list(h.ownerToken).find((u) => u.id === id)?.permissions).toContain('sale.edit_rate');
+    const { token: dflt } = await h.auth.login('default.clerk', 'temp-pass-123');
+    await h.auth.changePassword(dflt, 'temp-pass-123', 'my-own-pass-456');
+    expect(h.sales.quoteLine(dflt, { itemId: h.ids.can }).canEditRate).toBe(true);
+    expect(draft(h, dflt, { ratePaise: 90000 }).lines[0]).toMatchObject({ ratePaise: 90000, rateChanged: true });
+
+    const fixed = await makeEmployee(h, 'fixed.rate', ['sale.create']);
+    expect(h.sales.quoteLine(fixed, { itemId: h.ids.can }).canEditRate).toBe(false);
+    expect(codeOf(() => draft(h, fixed, {}))).toBe('NO_ERROR');
+    expect(codeOf(() => draft(h, fixed, { ratePaise: 92500 }))).toBe('NO_ERROR'); // typing the same rate is not a change
+    expect(codeOf(() => draft(h, fixed, { ratePaise: 90000 }))).toBe('PERMISSION_DENIED');
+    expect(codeOf(() => draft(h, fixed, { discountPaise: 100 }))).toBe('PERMISSION_DENIED');
+    expect(codeOf(() => h.sales.preview(fixed, { customerId: h.ids.farm, invoiceDate: '2026-11-01', lines: [{ itemId: h.ids.can, qtyMilli: 1000, ratePaise: 1 }] }))).toBe('PERMISSION_DENIED');
+    // changing an item's own price in the master list is a different permission again
+    const rater = await makeEmployee(h, 'rater', ['sale.create', 'sale.edit_rate']);
+    expect(codeOf(() => h.items.update(rater, h.ids.can, { saleRatePaise: 1 }))).toBe('PERMISSION_DENIED');
   });
 });
 

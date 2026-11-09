@@ -44,6 +44,9 @@ Unique partial indexes on `customer.gstin` and `supplier.gstin` (blank GSTINs ar
 ## Migration 003 (M5)
 `payment_allocation` (payment, bill, amount; append-only): which bills each payment settles. A bill's outstanding = total minus allocations of payments that are not reversed.
 
+## Migration 004 (M6)
+`purchase_receipt` (append-only: every quantity received against a purchase bill line); one live purchase bill per supplier and supplier invoice number (capitals ignored; a cancelled bill frees it); `sale_bill_line.list_rate_paise` (the item's standard rate when the bill was issued, beside the rate charged); indexes on supplier payments.
+
 ## Known follow-ups
 - Negative-stock override: not possible in v1 (CHECK constraint); see ADR 0002.
 - Legacy opening balances/stock must be imported as OPENING ledger entries so `reconcile()` stays clean.

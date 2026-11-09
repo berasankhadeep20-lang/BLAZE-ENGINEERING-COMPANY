@@ -15,7 +15,9 @@ export const PERMISSIONS = {
   'customer.approve': 'Approve or reject new customers',
   'supplier.view': 'View suppliers and purchase history',
   'supplier.edit': 'Add and edit suppliers',
+  'supplier.pay': 'Record payments made to suppliers',
   'sale.create': 'Create and confirm sale bills',
+  'sale.edit_rate': 'Change the rate per piece, or give a discount, on a bill (affects that bill only, not the item price)',
   'purchase.create': 'Create and confirm purchase bills',
   'bill.cancel': 'Cancel or return a confirmed bill (the only way to correct one)',
   'payment.record': 'Record customer payments',
@@ -42,6 +44,7 @@ export const DEFAULT_EMPLOYEE_PERMISSIONS: readonly Permission[] = [
   'customer.create',
   'supplier.view',
   'sale.create',
+  'sale.edit_rate',
   'purchase.create',
   'payment.record',
 ];

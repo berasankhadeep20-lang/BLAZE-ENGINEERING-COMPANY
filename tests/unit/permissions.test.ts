@@ -14,6 +14,12 @@ describe('permissions', () => {
       expect(DEFAULT_EMPLOYEE_PERMISSIONS).not.toContain(p);
     }
   });
+  it('changing the rate on a bill is a default employee permission; paying suppliers and changing item prices are not', () => {
+    expect(DEFAULT_EMPLOYEE_PERMISSIONS).toContain('sale.edit_rate');
+    expect(isGrantable('sale.edit_rate')).toBe(true);
+    expect(DEFAULT_EMPLOYEE_PERMISSIONS).not.toContain('supplier.pay');
+    expect(DEFAULT_EMPLOYEE_PERMISSIONS).not.toContain('price.edit');
+  });
   it('owner-only permissions are not grantable', () => {
     expect(OWNER_ONLY).toEqual(expect.arrayContaining(['user.manage', 'customer.approve', 'settings.edit']));
     for (const p of OWNER_ONLY) expect(isGrantable(p)).toBe(false);

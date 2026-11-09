@@ -1,7 +1,7 @@
 import type { SaleLineInput } from '../../src/application/sales/saleService';
 import { setupHarness, type Harness } from './auth';
 
-export type Shop = Harness & { recoveryCode: string; ids: { can: number; buty: number; naoh: number; farm: number } };
+export type Shop = Harness & { recoveryCode: string; ids: { can: number; buty: number; naoh: number; farm: number; supplier: number } };
 
 /** Create an employee who has changed their temporary password and is signed in. */
 export async function makeEmployee(h: Harness, username: string, permissions: string[]): Promise<string> {
@@ -25,7 +25,8 @@ export async function shopHarness(opts: { configure?: boolean } = {}): Promise<S
   const buty = h.items.create(h.ownerToken, { ...base, code: 'BUT-10', name: 'BUTYROMETER FOR MILK 0-10% ISI', hsn: '7017', unit: 'PCS', purchaseRatePaise: 4000, saleRatePaise: 5500, openingQtyMilli: 100000 });
   const naoh = h.items.create(h.ownerToken, { ...base, code: 'NAOH-500', name: 'SODIUM HYDROXIDE N/10 SOLUTION', hsn: '2815', unit: 'ML', packSize: '500', purchaseRatePaise: 20000, saleRatePaise: 24500, openingQtyMilli: 50000 });
   const farm = h.customers.create(h.ownerToken, { name: 'TEST DAIRY FARM', state: 'West Bengal', address: 'Vill Example, Hooghly 712000', placeOfSupply: 'EXAMPLEPUR' });
-  return { ...h, ids: { can, buty, naoh, farm } };
+  const supplier = h.suppliers.create(h.ownerToken, { name: 'SAMPLE DAIRY EQUIPMENT CO', state: 'West Bengal', address: 'Plot 1, Example Estate' });
+  return { ...h, ids: { can, buty, naoh, farm, supplier } };
 }
 
 /** The three lines of the sample bill: two of each item. */

@@ -16,6 +16,8 @@ export interface AppSettings {
   invoicePrefix: string | null; // e.g. "BZ": bills are numbered prefix + 2-digit year + sequence
   invoiceNumberWidth: number;
   receiptPrefix: string;
+  purchasePrefix: string; // internal purchase bill numbers (not a legal series); defaults to PB
+  supplierReceiptPrefix: string; // numbers for payments made to suppliers; defaults to SP
   roundOff: RoundOffMode;
   warnBelowCost: boolean;
   paymentMethods: string[];
@@ -27,6 +29,8 @@ const KEY = {
   invoicePrefix: 'invoice.prefix',
   invoiceNumberWidth: 'invoice.number_width',
   receiptPrefix: 'receipt.prefix',
+  purchasePrefix: 'purchase.prefix',
+  supplierReceiptPrefix: 'supplier_receipt.prefix',
   roundOff: 'invoice.round_off',
   warnBelowCost: 'sale.warn_below_cost',
   paymentMethods: 'payment.methods',
@@ -50,6 +54,8 @@ export function readSettings(db: Db): AppSettings {
     invoicePrefix: m.get(KEY.invoicePrefix) ?? null,
     invoiceNumberWidth: Number.isInteger(width) && width >= 3 && width <= 8 ? width : 4,
     receiptPrefix: m.get(KEY.receiptPrefix) ?? 'RC',
+    purchasePrefix: m.get(KEY.purchasePrefix) ?? 'PB',
+    supplierReceiptPrefix: m.get(KEY.supplierReceiptPrefix) ?? 'SP',
     roundOff: m.get(KEY.roundOff) === 'NONE' ? 'NONE' : 'NEAREST_RUPEE',
     warnBelowCost: m.get(KEY.warnBelowCost) !== 'false',
     paymentMethods: methods,
@@ -89,10 +95,10 @@ export class SettingsService {
       p.require(!!st, 'business state is not a recognised Indian state or union territory');
       next[KEY.businessState] = st?.name ?? '';
     }
-    for (const k of ['invoicePrefix', 'receiptPrefix'] as const) {
+    for (const k of ['invoicePrefix', 'receiptPrefix', 'purchasePrefix', 'supplierReceiptPrefix'] as const) {
       const v = patch[k];
       if (v !== undefined) {
-        p.require(/^[A-Za-z0-9]{1,6}$/.test(v.trim()), `${k === 'invoicePrefix' ? 'invoice' : 'receipt'} prefix must be 1 to 6 letters or digits`);
+        p.require(/^[A-Za-z0-9]{1,6}$/.test(v.trim()), `${k} must be 1 to 6 letters or digits`);
         next[KEY[k]] = v.trim().toUpperCase();
       }
     }
@@ -129,6 +135,12 @@ export class SettingsService {
     });
     return readSettings(this.db);
   }
+}
+
+/** Purchases only need the business state (to decide CGST+SGST versus IGST). */
+export function requireBusinessState(s: AppSettings): string {
+  if (!s.businessState) throw new AppError('VALIDATION', 'please set your business state in Settings before entering purchases', { missing: ['your business state'] });
+  return s.businessState;
 }
 
 /** Throws a clear VALIDATION error naming whatever setting is missing before a bill can be issued. */
