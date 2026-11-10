@@ -3,6 +3,7 @@ import { stockStatus, uomLabel } from '../../src/domain/inventory';
 import { formatPlainRupees } from '../../src/domain/money';
 import { localDayRangeToUtc, toLocalDateTime } from '../../src/shared/clock';
 import { toCsv } from '../../src/shared/csv';
+import { bpToPercent, displayDate, displayDateTime, escapeHtml, safeFileName } from '../../src/shared/format';
 
 describe('inventory rules', () => {
   it('stock status: OUT, LOW (at or below a non-zero reorder level), OK', () => {
@@ -66,5 +67,24 @@ describe('local day ranges (shop is in India, UTC+5:30)', () => {
     expect(() => localDayRangeToUtc('2026-11-02', '2026-11-01')).toThrow();
     expect(() => localDayRangeToUtc('2026-02-30')).toThrow();
     expect(() => localDayRangeToUtc('01/11/2026')).toThrow();
+  });
+});
+
+describe('display helpers', () => {
+  it('formats dates like the sample bill', () => {
+    expect(displayDate('2026-10-31')).toBe('31/10/2026');
+    expect(displayDate(null)).toBe('');
+    expect(displayDate('not a date')).toBe('');
+    expect(displayDateTime('2026-11-01 00:30')).toBe('01/11/2026 00:30');
+  });
+  it('shows GST rates as percentages', () => {
+    expect(bpToPercent(1800)).toBe('18.00');
+    expect(bpToPercent(900)).toBe('9.00');
+    expect(bpToPercent(250)).toBe('2.50');
+  });
+  it('escapes HTML and makes safe file names', () => {
+    expect(escapeHtml(`<a href="x">Tom & 'Jerry'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;Tom &amp; &#39;Jerry&#39;&lt;/a&gt;');
+    expect(safeFileName('Statement - A/B: C*?')).toBe('Statement-A-B-C');
+    expect(safeFileName('///')).toBe('file');
   });
 });

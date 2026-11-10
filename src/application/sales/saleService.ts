@@ -355,7 +355,7 @@ export class SaleService {
 
     const cols = {
       invoice_date: input.invoiceDate, order_no: clean(input.orderNo), order_date: clean(input.orderDate), transport_mode: clean(input.transportMode),
-      vehicle_no: clean(input.vehicleNo), supply_date: clean(input.supplyDate), place_of_supply: clean(input.placeOfSupply) ?? customer.place_of_supply,
+      vehicle_no: clean(input.vehicleNo), supply_date: clean(input.supplyDate), place_of_supply: clean(input.placeOfSupply) ?? customer.place_of_supply ?? customer.state,
       customer_id: input.customerId, cust_name: customer.name, cust_address: customer.address, cust_gstin: customer.gstin, cust_state: customer.state,
       tax_type: taxType, taxable_paise: totals.taxableTotalPaise, cgst_paise: totals.cgstPaise, sgst_paise: totals.sgstPaise, igst_paise: totals.igstPaise,
       delivery_paise: dl?.amountPaise ?? 0, delivery_gst_rate_bp: dl?.gstRateBp ?? 0, delivery_tax_paise: totals.delivery ? totals.delivery.cgstPaise + totals.delivery.sgstPaise + totals.delivery.igstPaise : 0,
@@ -458,7 +458,7 @@ export class SaleService {
              place_of_supply = ?, tax_type = ?, taxable_paise = ?, cgst_paise = ?, sgst_paise = ?, igst_paise = ?, delivery_tax_paise = ?,
              round_off_paise = ?, total_paise = ?, confirmed_by = ?, confirmed_at = ? WHERE id = ?`,
         )
-        .run(billNo, fy, customer.name, customer.address, customer.gstin, customer.state, bill.place_of_supply ?? customer.place_of_supply, taxType,
+        .run(billNo, fy, customer.name, customer.address, customer.gstin, customer.state, bill.place_of_supply ?? customer.place_of_supply ?? customer.state, taxType,
           totals.taxableTotalPaise, totals.cgstPaise, totals.sgstPaise, totals.igstPaise,
           totals.delivery ? totals.delivery.cgstPaise + totals.delivery.sgstPaise + totals.delivery.igstPaise : 0,
           totals.roundOffPaise, totals.totalPaise, user.id, ctx.now, billId);

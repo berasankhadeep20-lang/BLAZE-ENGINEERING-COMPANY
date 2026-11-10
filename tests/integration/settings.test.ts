@@ -49,4 +49,48 @@ describe('settings', () => {
       expect(codeOf(() => h.settings.update(h.ownerToken, bad))).toBe('VALIDATION');
     }
   });
+
+  describe('business profile and invoice details', () => {
+    it('are stored, normalised, and can be cleared with an empty value; the title and declaration fall back to defaults', async () => {
+      const h = await setupHarness();
+      const s1 = h.settings.update(h.ownerToken, {
+        businessAddress: ' 12 Example Road\nKolkata ', businessPhone: '+91 90000 00000', businessEmail: 'a@example.invalid', businessGstin: '19abcde1234f1zx', businessState: 'West Bengal',
+        bankName: 'EXAMPLE BANK', bankBranch: 'Example Branch', bankAccountNo: '0000 0000 0000', bankIfsc: 'exam0000001', invoiceTerms: 'Pay in 30 days.', invoiceTitle: 'Tax Invoice',
+        invoiceDeclaration: 'We declare this is true.', invoiceCopies: ['Original', 'Duplicate'],
+      });
+      expect(s1).toMatchObject({
+        businessAddress: '12 Example Road\nKolkata', businessGstin: '19ABCDE1234F1ZX', bankAccountNo: '000000000000', bankIfsc: 'EXAM0000001', invoiceTerms: 'Pay in 30 days.',
+        invoiceTitle: 'Tax Invoice', invoiceDeclaration: 'We declare this is true.', invoiceCopies: ['Original', 'Duplicate'],
+      });
+      const s2 = h.settings.update(h.ownerToken, { businessAddress: '', bankName: '', invoiceTerms: '  ', invoiceTitle: '', invoiceDeclaration: '' });
+      expect(s2).toMatchObject({ businessAddress: null, bankName: null, invoiceTerms: null, invoiceTitle: 'Tax Invoice cum Challan', invoiceDeclaration: 'Certified that the particulars given above are true and correct' });
+      expect(h.settings.update(h.ownerToken, { invoiceCopies: [] }).invoiceCopies).toEqual([]);
+    });
+
+    it('checks the GSTIN (format, check digit, and agreement with the business state) and the bank details', async () => {
+      const h = await setupHarness();
+      const bad = (patch: object): ErrorCode | 'NO_ERROR' => codeOf(() => h.settings.update(h.ownerToken, patch));
+      expect(bad({ businessGstin: '19ABCDE1234F1ZY' })).toBe('VALIDATION'); // check digit
+      expect(bad({ businessGstin: 'not a gstin' })).toBe('VALIDATION');
+      h.settings.update(h.ownerToken, { businessState: 'West Bengal', businessGstin: '19ABCDE1234F1ZX' });
+      expect(bad({ businessGstin: '27ABCDE1234F1Z0' })).toBe('VALIDATION'); // Maharashtra GSTIN, West Bengal business
+      expect(bad({ businessState: 'Maharashtra' })).toBe('VALIDATION'); // state would no longer match the GSTIN
+      expect(bad({ businessState: 'Maharashtra', businessGstin: '27ABCDE1234F1Z0' })).toBe('NO_ERROR'); // both changed together
+      expect(bad({ bankAccountNo: '12ab' })).toBe('VALIDATION');
+      expect(bad({ bankIfsc: 'NOPE' })).toBe('VALIDATION');
+      expect(bad({ businessEmail: 'nope' })).toBe('VALIDATION');
+      expect(bad({ businessPhone: 'call me' })).toBe('VALIDATION');
+      expect(bad({ invoiceCopies: ['A', 'B', 'C', 'D'] })).toBe('VALIDATION');
+      expect(bad({ invoiceCopies: ['A', 'a'] })).toBe('VALIDATION');
+      expect(bad({ invoiceTerms: 'x'.repeat(601) })).toBe('VALIDATION');
+    });
+
+    it('masks the bank account number in the audit trail', async () => {
+      const h = await setupHarness();
+      h.settings.update(h.ownerToken, { bankAccountNo: '123456789012' });
+      const rows = JSON.stringify(h.db.prepare("SELECT detail_json FROM audit_log WHERE action = 'SETTINGS_UPDATE'").all());
+      expect(rows).toContain('••••9012');
+      expect(rows).not.toContain('123456789012');
+    });
+  });
 });
