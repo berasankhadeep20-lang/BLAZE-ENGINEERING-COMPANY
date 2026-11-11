@@ -177,7 +177,7 @@ const ITEM_SELECT = 'SELECT id, code, name, hsn, unit, pack_size, purchase_rate_
 const BILL_SELECT = `SELECT b.*, uc.display_name AS created_by_name, uf.display_name AS confirmed_by_name, ux.display_name AS cancelled_by_name
   FROM purchase_bill b LEFT JOIN user uc ON uc.id = b.created_by LEFT JOIN user uf ON uf.id = b.confirmed_by LEFT JOIN user ux ON ux.id = b.cancelled_by`;
 
-const PENDING_EXISTS_SQL = `EXISTS (SELECT 1 FROM purchase_bill_line l WHERE l.bill_id = b.id AND l.ordered_qty_milli >
+export const PENDING_EXISTS_SQL = `EXISTS (SELECT 1 FROM purchase_bill_line l WHERE l.bill_id = b.id AND l.ordered_qty_milli >
   COALESCE((SELECT SUM(r.qty_milli) FROM purchase_receipt r WHERE r.bill_id = l.bill_id AND r.line_no = l.line_no), 0))`;
 
 interface ResolvedLine {

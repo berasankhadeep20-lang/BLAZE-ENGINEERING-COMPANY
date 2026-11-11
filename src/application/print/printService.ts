@@ -8,6 +8,8 @@ import type { AuthService } from '../auth/authService';
 import type { ItemFilters, ItemService } from '../inventory/itemService';
 import type { MovementFilters, StockService } from '../inventory/stockService';
 import type { CustomerService } from '../parties/customerService';
+import type { ReportRequest, ReportService } from '../reports/reportService';
+import { tableToReportInput } from '../reports/reportTable';
 import type { SaleService } from '../sales/saleService';
 import { readLogo, readSettings, type AppSettings } from '../settings/settingsService';
 import { renderInvoiceHtml, type InvoiceBusiness } from './invoiceHtml';
@@ -27,6 +29,7 @@ export interface PrintServices {
   customers: CustomerService;
   items: ItemService;
   stock: StockService;
+  reports: ReportService;
 }
 
 const BUSINESS_FALLBACK = '(business name not set in Settings)';
@@ -103,7 +106,7 @@ export class PrintService {
       { header: 'Date and time', width: '16%' }, { header: 'Entry', width: '14%' }, { header: 'Reference', width: '13%' }, { header: 'Note', width: '23%' },
       { header: 'Debit (Rs.)', align: 'right', width: '11%' }, { header: 'Credit (Rs.)', align: 'right', width: '11%' }, { header: 'Balance (Rs.)', align: 'right', width: '12%' },
     ];
-    return this.report(settings, `Statement of Account - ${c.name}`, [`Customer: ${c.name}`, ...(c.address ? [c.address] : []), `GSTIN: ${c.gstinDisplay}`, `Period: ${period}`], columns, rows, [0, rows.length - 1], [`Balance due: Rs. ${formatINR(s.closingPaise)}`], `Statement-${c.name}`, false);
+    return this.tableReport(settings, `Statement of Account - ${c.name}`, [`Customer: ${c.name}`, ...(c.address ? [c.address] : []), `GSTIN: ${c.gstinDisplay}`, `Period: ${period}`], columns, rows, [0, rows.length - 1], [`Balance due: Rs. ${formatINR(s.closingPaise)}`], `Statement-${c.name}`, false);
   }
 
   /** Customers with a balance due, as at today or the end of a past day. */
@@ -111,7 +114,7 @@ export class PrintService {
     const d = this.svc.customers.dues(token, { ...filters, limit: Number.MAX_SAFE_INTEGER, offset: 0 });
     const settings = readSettings(this.db);
     const rows = d.rows.map((r) => [r.name, r.phone ?? '', formatINR(r.balancePaise), r.lastSaleAt ? dt(r.lastSaleAt) : '', r.lastPaymentAt ? dt(r.lastPaymentAt) : '']);
-    return this.report(
+    return this.tableReport(
       settings, 'Customers with balance due', [filters.asOfDate ? `As at the end of ${displayDate(filters.asOfDate)}` : 'As at today'],
       [{ header: 'Customer', width: '34%' }, { header: 'Phone', width: '16%' }, { header: 'Balance due (Rs.)', align: 'right', width: '18%' }, { header: 'Last sale', width: '16%' }, { header: 'Last payment', width: '16%' }],
       rows, [], [`Total outstanding: Rs. ${formatINR(d.totalOutstandingPaise)} across ${String(d.customerCount)} customer(s)`], 'Customer-dues', false,
@@ -123,7 +126,7 @@ export class PrintService {
     const { rows: items } = this.svc.items.list(token, { ...filters, limit: Number.MAX_SAFE_INTEGER, offset: 0 });
     const settings = readSettings(this.db);
     const rows = items.map((i) => [i.code, i.name, i.category ?? '', i.hsn ?? '', i.uomLabel, formatQty(i.qtyMilli), formatQty(i.reorderQtyMilli), formatINR(i.saleRatePaise), i.isActive ? i.stockStatus : 'INACTIVE']);
-    return this.report(
+    return this.tableReport(
       settings, 'Stock list', [`${String(items.length)} item(s)`],
       [{ header: 'Code', width: '9%' }, { header: 'Item', width: '27%' }, { header: 'Category', width: '12%' }, { header: 'HSN', width: '7%' }, { header: 'Unit', width: '10%' },
         { header: 'Qty', align: 'right', width: '7%' }, { header: 'Reorder', align: 'right', width: '7%' }, { header: 'Sale rate (Rs.)', align: 'right', width: '12%' }, { header: 'Status', width: '9%' }],
@@ -137,7 +140,7 @@ export class PrintService {
     const settings = readSettings(this.db);
     const period = filters.fromDate || filters.toDate ? `${filters.fromDate ? displayDate(filters.fromDate) : 'the beginning'} to ${filters.toDate ? displayDate(filters.toDate) : 'today'}` : 'All dates';
     const rows = moves.map((m) => [dt(m.at), m.itemCode, m.itemName, formatQty(m.qtyDeltaMilli), m.reason, m.refNo ?? '', m.note ?? '', formatQty(m.qtyAfterMilli), m.userName]);
-    return this.report(
+    return this.tableReport(
       settings, 'Stock movements', [`Period: ${period}`, `${String(moves.length)} movement(s)`],
       [{ header: 'Date and time', width: '13%' }, { header: 'Code', width: '8%' }, { header: 'Item', width: '18%' }, { header: 'Change', align: 'right', width: '7%' }, { header: 'Reason', width: '10%' },
         { header: 'Reference', width: '10%' }, { header: 'Note', width: '16%' }, { header: 'Balance', align: 'right', width: '8%' }, { header: 'User', width: '10%' }],
@@ -145,7 +148,15 @@ export class PrintService {
     );
   }
 
-  private report(s: AppSettings, title: string, subtitle: string[], columns: ReportColumn[], rows: string[][], emphasis: number[], footer: string[], fileBase: string, landscape: boolean): PrintResult {
+  /** Any report from the reports service, printable (same table as the screen and the CSV). */
+  report(token: string, req: ReportRequest): PrintResult {
+    const table = this.svc.reports.table(token, req);
+    const settings = readSettings(this.db);
+    const html = renderReportHtml(tableToReportInput(table, settings.businessName ?? BUSINESS_FALLBACK, dt(this.clock.now().toISOString())));
+    return { html, title: table.title, fileName: `${safeFileName(table.title)}.pdf`, warnings: settings.businessName ? [] : ['Your business name is not set in Settings.'], copies: [] };
+  }
+
+  private tableReport(s: AppSettings, title: string, subtitle: string[], columns: ReportColumn[], rows: string[][], emphasis: number[], footer: string[], fileBase: string, landscape: boolean): PrintResult {
     const generatedAt = dt(this.clock.now().toISOString());
     const html = renderReportHtml({ businessName: s.businessName ?? BUSINESS_FALLBACK, title, subtitleLines: subtitle, columns, rows, emphasisRows: emphasis, footerLines: footer, generatedAt, landscape });
     return { html, title, fileName: `${safeFileName(fileBase)}.pdf`, warnings: s.businessName ? [] : ['Your business name is not set in Settings.'], copies: [] };

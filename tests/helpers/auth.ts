@@ -12,6 +12,7 @@ import { PaymentService } from '../../src/application/sales/paymentService';
 import { SaleService } from '../../src/application/sales/saleService';
 import { SettingsService } from '../../src/application/settings/settingsService';
 import { PrintService } from '../../src/application/print/printService';
+import { ReportService } from '../../src/application/reports/reportService';
 import { openDatabase, type Db } from '../../src/infrastructure/db/connection';
 import { loadMigrations, migrate } from '../../src/infrastructure/db/migrate';
 import type { PasswordHasher } from '../../src/infrastructure/security/passwordHasher';
@@ -55,6 +56,7 @@ export interface Harness {
   supplierPayments: SupplierPaymentService;
   settings: SettingsService;
   print: PrintService;
+  reports: ReportService;
   ownerToken: string;
 }
 
@@ -82,8 +84,9 @@ export function buildServices(opts: { idleTimeoutMs?: number } = {}): Omit<Harne
   const purchases = new PurchaseService(db, auth, clock);
   const supplierPayments = new SupplierPaymentService(db, auth, clock);
   const settings = new SettingsService(db, auth, clock);
-  const print = new PrintService(db, auth, { sales, customers, items, stock }, clock);
-  return { db, clock, sessions, auth, users, items, stock, customers, suppliers, sales, payments, purchases, supplierPayments, settings, print };
+  const reports = new ReportService(db, auth, clock);
+  const print = new PrintService(db, auth, { sales, customers, items, stock, reports }, clock);
+  return { db, clock, sessions, auth, users, items, stock, customers, suppliers, sales, payments, purchases, supplierPayments, settings, print, reports };
 }
 
 /** Services after first-run setup, with the owner signed in. */
