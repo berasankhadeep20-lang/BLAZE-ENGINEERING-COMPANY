@@ -10,6 +10,8 @@ export const ERROR_CODES = [
   'OVERPAYMENT',
   'CUSTOMER_NOT_APPROVED',
   'ACK_REQUIRED', // the user must explicitly acknowledge something (for example a sale below cost) and resubmit
+  'BACKUP_FAILED', // a backup could not be created or did not pass verification
+  'BACKUP_INVALID', // a file is not a usable backup
   'CONFLICT',
   'INVARIANT', // a programming error: the code broke a rule it should never break
 ] as const;

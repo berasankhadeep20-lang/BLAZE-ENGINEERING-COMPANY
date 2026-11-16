@@ -37,6 +37,8 @@ export interface AppSettings {
   roundOff: RoundOffMode;
   warnBelowCost: boolean;
   paymentMethods: string[];
+  backupFolder: string | null; // where "Back up now" saves by default (for example a USB drive); remembered after each backup
+  backupReminderDays: number; // remind the owner when the last backup is this many days old; 0 = no reminder
   hasLogo: boolean;
 }
 
@@ -63,6 +65,8 @@ const KEY = {
   roundOff: 'invoice.round_off',
   warnBelowCost: 'sale.warn_below_cost',
   paymentMethods: 'payment.methods',
+  backupFolder: 'backup.folder',
+  backupReminderDays: 'backup.reminder_days',
 } as const satisfies Record<Exclude<keyof AppSettings, 'hasLogo'>, string>;
 const LOGO_KEY = 'business.logo';
 
@@ -105,6 +109,8 @@ export function readSettings(db: Db): AppSettings {
     roundOff: m.get(KEY.roundOff) === 'NONE' ? 'NONE' : 'NEAREST_RUPEE',
     warnBelowCost: m.get(KEY.warnBelowCost) !== 'false',
     paymentMethods: stringList(m.get(KEY.paymentMethods), DEFAULT_PAYMENT_METHODS, false),
+    backupFolder: get(KEY.backupFolder),
+    backupReminderDays: ((n) => (Number.isInteger(n) && n >= 0 && n <= 365 ? n : 7))(m.has(KEY.backupReminderDays) ? Number(m.get(KEY.backupReminderDays)) : 7),
     hasLogo: !!db.prepare('SELECT 1 FROM app_setting WHERE key = ?').get(LOGO_KEY),
   };
 }
@@ -177,6 +183,11 @@ export class SettingsService {
     text('invoiceTerms', 600, 'terms and conditions');
     text('invoiceTitle', 60, 'invoice title');
     text('invoiceDeclaration', 200, 'declaration');
+    text('backupFolder', 260, 'backup folder');
+    if (patch.backupReminderDays !== undefined) {
+      p.require(Number.isInteger(patch.backupReminderDays) && patch.backupReminderDays >= 0 && patch.backupReminderDays <= 365, 'the reminder must be 0 (off) to 365 days');
+      next[KEY.backupReminderDays] = String(patch.backupReminderDays);
+    }
 
     if (patch.businessGstin !== undefined) {
       const g = patch.businessGstin.trim().toUpperCase().replace(/\s/g, '');

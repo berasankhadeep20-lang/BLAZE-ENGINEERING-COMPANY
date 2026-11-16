@@ -93,4 +93,16 @@ describe('settings', () => {
       expect(rows).not.toContain('123456789012');
     });
   });
+
+  it('backup settings: no folder until one is chosen, a reminder every 7 days by default, both changeable by the owner only', async () => {
+    const h = await setupHarness();
+    expect(h.settings.get(h.ownerToken)).toMatchObject({ backupFolder: null, backupReminderDays: 7 });
+    expect(h.settings.update(h.ownerToken, { backupFolder: ' D:\\Backups ', backupReminderDays: 3 })).toMatchObject({ backupFolder: 'D:\\Backups', backupReminderDays: 3 });
+    expect(h.settings.update(h.ownerToken, { backupFolder: '', backupReminderDays: 0 })).toMatchObject({ backupFolder: null, backupReminderDays: 0 });
+    for (const bad of [{ backupReminderDays: -1 }, { backupReminderDays: 366 }, { backupReminderDays: 1.5 }, { backupFolder: 'x'.repeat(261) }]) {
+      expect(codeOf(() => h.settings.update(h.ownerToken, bad))).toBe('VALIDATION');
+    }
+    const clerk = await makeEmployee(h, 'clerk', ['backup.create']);
+    expect(codeOf(() => h.settings.update(clerk, { backupReminderDays: 1 }))).toBe('PERMISSION_DENIED'); // settings are the owner's
+  });
 });

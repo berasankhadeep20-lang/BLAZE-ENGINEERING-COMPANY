@@ -3,7 +3,7 @@
 Offline-first desktop application for an Indian milk-testing-equipment and chemical wholesale business:
 purchase and sale bills, stock, customer dues, reports, owner/employee accounts, backup/restore, and A4 tax invoice printing.
 
-**Status:** M0 (scaffold, money/GST engine), M1 (Unit of Work, audit, number series, ledgers, reconciliation) and M2 (accounts, sessions, permissions) and M3 (items, stock corrections, movement history) M4 (customers, suppliers, approval, dues, statements) M5 (sale bills, customer payments, settings) M6 (purchase bills, supplier payments, editable rate per piece) M7 (A4 invoice, statements and report printouts, business details in Settings) and M8 (reports and dashboard numbers) complete.
+**Status:** M0 (scaffold, money/GST engine), M1 (Unit of Work, audit, number series, ledgers, reconciliation) and M2 (accounts, sessions, permissions) and M3 (items, stock corrections, movement history) M4 (customers, suppliers, approval, dues, statements) M5 (sale bills, customer payments, settings) M6 (purchase bills, supplier payments, editable rate per piece) M7 (A4 invoice, statements and report printouts, business details in Settings) M8 (reports and dashboard numbers) and M9 (verified backup, safe restore, demo mode) complete.
 There is no application window yet; the first window (login) arrives with the auth milestone.
 
 ## Stack
@@ -38,12 +38,15 @@ npm test        # tests only
 - `src/application/purchases/`: `PurchaseService` (draft, confirm, partial receipt, cancel, list, rate quote and live preview), `SupplierPaymentService`, shared supplier-payment mechanics
 - `src/application/print/`: `renderInvoiceHtml` (the A4 Tax Invoice cum Challan), `renderReportHtml` (statements, stock lists, dues, movements), `PrintService` (preview/print/PDF source, copy labels, warnings, print audit)
 - `src/application/reports/`: `ReportService` (best sellers, customer purchase history, sales and purchases by day or month, low or no movement, purchases by supplier, dashboard numbers) and `ReportTable` (one table feeds the screen, the CSV and the printout)
+- `src/application/backup/`: `BackupService` (back up now with verification, status and reminder, history, check a file, inspect then restore, cancel)
+- `src/application/demo/`: the demo database (own file, sample business, reset, never mixed with real data); `src/application/composition.ts` wires every service to a database
+- `src/infrastructure/backup/`: the `.blazebak` format, verified backup files, safe restore staging, and `openAppDatabase` (the start-up opener: finishes a staged restore, takes a safety copy before an upgrade)
 - `src/application/settings/`: `SettingsService` and `readSettings` (business state, invoice prefix, rounding, payment methods, below-cost warning)
 - `src/domain/gstin.ts`: GSTIN check digit, Indian state codes, intra/inter-state rule
 - `src/infrastructure/security/`: argon2id password hasher
 - `src/shared/`: typed `AppError` codes, injectable clock
 - `tests/`: unit tests for the domain, integration tests for migrations, the database-enforced rules, atomicity and ledger invariants
-- `docs/adr/`: 0001 money and rounding; 0002 Unit of Work and ledger posting; 0003 accounts, sessions and permissions; 0004 items and stock; 0005 customers and suppliers; 0006 sale bills and payments; 0007 purchases and the editable rate per piece; 0008 printing; 0009 reports and dashboard
+- `docs/adr/`: 0001 money and rounding; 0002 Unit of Work and ledger posting; 0003 accounts, sessions and permissions; 0004 items and stock; 0005 customers and suppliers; 0006 sale bills and payments; 0007 purchases and the editable rate per piece; 0008 printing; 0009 reports and dashboard; 0010 backup, restore and demo mode
 
 ## Data safety
 Never commit real business data, `.mdb`/`.sqlite`/`.blazebak` files, bank or GSTIN details, or the real sample bill.

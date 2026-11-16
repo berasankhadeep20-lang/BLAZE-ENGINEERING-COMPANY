@@ -42,6 +42,7 @@ Out of scope for v1: networking/sync, legacy data import (later phase).
 6. Bank, GSTIN, address come from settings, never hard-coded.
 
 ## 6. Decisions
+- Backup is verified before success is reported; restore replaces (never merges), needs inspection and an explicit confirmation, saves a safety copy first, completes at the next start, and can be undone. Demo and real data live in separate files and never mix. Backups are not encrypted (advice: BitLocker).
 - Reports count only confirmed bills, show quantity and number of bills as separate columns, use shop-local calendar dates, and come out as one table for screen, CSV and print. `report.view` is not an employee default because reports reveal costs.
 - The printed invoice follows the sample's layout; its business, bank, tax and terms details come from Settings only. The round-off is printed as its own line. Inter-state bills print IGST. Drafts and cancelled bills are watermarked.
 - On a sale invoice the current rate per piece is shown first and the user may type the desired rate for that bill (permission `sale.edit_rate`, on by default for employees; `price.edit` is only for the item master). The standard rate is stored beside the rate charged.
