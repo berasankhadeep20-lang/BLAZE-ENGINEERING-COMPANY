@@ -1,0 +1,9 @@
+# Keep line endings identical on every machine (Windows checkouts included): migrations are checksummed and the CSV/HTML tests compare exact text.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.blazebak binary

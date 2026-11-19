@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { PurchaseDraftInput } from '../../src/application/purchases/purchaseService';
 import { AppError, type ErrorCode } from '../../src/shared/errors';
@@ -30,13 +31,11 @@ const enter = (h: Shop, over: Partial<PurchaseDraftInput> = {}): { id: number; b
   return { id: b.id, billNo: b.billNo ?? '', total: b.totals.totalPaise };
 };
 
-const originalTz = process.env.TZ;
 beforeAll(() => {
-  process.env.TZ = 'Asia/Kolkata';
+  setShopTimeZone('Asia/Kolkata');
 });
 afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
+  setShopTimeZone(undefined);
 });
 
 describe('entering a purchase bill', () => {

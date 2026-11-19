@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppError, type ErrorCode } from '../../src/shared/errors';
 import { makeEmployee, quickBill, sampleLines, shopHarness, type Shop } from '../helpers/shop';
@@ -16,13 +17,11 @@ const balance = (h: Shop, id = h.ids.farm): number => h.customers.get(h.ownerTok
 const count = (h: Shop, sql: string): number => (h.db.prepare(sql).get() as { n: number }).n;
 
 // the shop is in India; "today" below is a local date in UTC+5:30
-const originalTz = process.env.TZ;
 beforeAll(() => {
-  process.env.TZ = 'Asia/Kolkata';
+  setShopTimeZone('Asia/Kolkata');
 });
 afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
+  setShopTimeZone(undefined);
 });
 
 describe('the sample bill, end to end', () => {

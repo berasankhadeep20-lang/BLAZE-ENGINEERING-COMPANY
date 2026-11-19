@@ -8,7 +8,7 @@ import { verifyBackupFile } from '../../src/infrastructure/backup/backupFile';
 import { applyPendingRestore, pendingPaths } from '../../src/infrastructure/backup/restoreStaging';
 import { openAppDatabase } from '../../src/infrastructure/backup/startup';
 import { AppError, type ErrorCode } from '../../src/shared/errors';
-import { LATEST_SCHEMA, MIGRATIONS_DIR, cleanupWorlds, count, dumpAll, fileWorld, openWorld, scratch, sellMore, type FileWorld } from '../helpers/fileWorld';
+import { LATEST_SCHEMA, MIGRATIONS_DIR, cleanupWorlds, count, dumpAll, fileWorld, openWorld, scratch, sellMore, trackDb, type FileWorld } from '../helpers/fileWorld';
 
 afterEach(cleanupWorlds);
 
@@ -369,8 +369,11 @@ describe('start-up: a safety copy before any database upgrade', () => {
     for (const f of readdirSync(MIGRATIONS_DIR).filter((x) => x.endsWith('.sql')).sort().slice(0, upTo)) copyFileSync(join(MIGRATIONS_DIR, f), join(dir, f));
     return dir;
   }
-  const open = (root: string, migrationsDir: string, dataDir = join(root, 'data')): ReturnType<typeof openAppDatabase> =>
-    openAppDatabase({ dbPath: join(root, 'data', 'blaze.sqlite'), migrationsDir, dataDir, appVersion: 'test' });
+  const open = (root: string, migrationsDir: string, dataDir = join(root, 'data')): ReturnType<typeof openAppDatabase> => {
+    const r = openAppDatabase({ dbPath: join(root, 'data', 'blaze.sqlite'), migrationsDir, dataDir, appVersion: 'test', synchronous: 'OFF' });
+    trackDb(r.db);
+    return r;
+  };
 
   it('a brand-new database needs no safety copy', () => {
     const root = scratch();

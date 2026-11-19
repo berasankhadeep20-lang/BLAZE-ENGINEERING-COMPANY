@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assertCustomerUsable, type CustomerInput } from '../../src/application/parties/customerService';
 import { postCustomerLedger } from '../../src/infrastructure/db/ledgers';
@@ -28,13 +29,11 @@ function post(h: Harness, iso: string, customerId: number, entryType: 'SALE' | '
 }
 
 // the shop is in India: day boundaries below are local days in UTC+5:30
-const originalTz = process.env.TZ;
 beforeAll(() => {
-  process.env.TZ = 'Asia/Kolkata';
+  setShopTimeZone('Asia/Kolkata');
 });
 afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
+  setShopTimeZone(undefined);
 });
 
 describe('creating customers', () => {

@@ -14,6 +14,12 @@ export const OWNER_PW = 'owner-pass-1';
 const roots: string[] = [];
 const dbs: Db[] = [];
 
+/** Register a database so it is closed after the test (Windows cannot delete a folder that holds an open database file). */
+export function trackDb<T extends Db>(db: T): T {
+  dbs.push(db);
+  return db;
+}
+
 /** A scratch folder, removed after the test (see cleanupWorlds). */
 export function scratch(): string {
   const dir = mkdtempSync(join(tmpdir(), 'blaze-test-'));
@@ -46,7 +52,7 @@ export interface FileWorld {
 export async function openWorld(root: string, clock: TestClock, opts: { migrationsDir?: string; signIn?: boolean } = {}): Promise<Omit<FileWorld, 'ids'>> {
   const dbPath = join(root, 'data', 'blaze.sqlite');
   const dataDir = join(root, 'data');
-  const opened = openAppDatabase({ dbPath, migrationsDir: opts.migrationsDir ?? MIGRATIONS_DIR, dataDir, appVersion: 'test', clock });
+  const opened = openAppDatabase({ dbPath, migrationsDir: opts.migrationsDir ?? MIGRATIONS_DIR, dataDir, appVersion: 'test', clock, synchronous: 'OFF' });
   dbs.push(opened.db);
   const s = createServices({ db: opened.db, hasher: fakeHasher, clock, backup: { appVersion: 'test', knownSchemaVersion: LATEST_SCHEMA, paths: { dbPath, dataDir } } });
   let token = '';

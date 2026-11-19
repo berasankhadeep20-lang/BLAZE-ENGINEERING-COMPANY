@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -9,13 +10,11 @@ import { AppError, type ErrorCode } from '../../src/shared/errors';
 import { fakeHasher, TestClock } from '../helpers/auth';
 import { LATEST_SCHEMA, MIGRATIONS_DIR, cleanupWorlds, dumpAll, fileWorld, scratch } from '../helpers/fileWorld';
 
-const originalTz = process.env.TZ;
 beforeAll(() => {
-  process.env.TZ = 'Asia/Kolkata';
+  setShopTimeZone('Asia/Kolkata');
 });
 afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
+  setShopTimeZone(undefined);
 });
 
 const handles: DemoHandle[] = [];

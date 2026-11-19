@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { closeSync, existsSync, fsyncSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { localStamp } from '../../shared/clock';
 import { AppError } from '../../shared/errors';
 import type { Db } from '../db/connection';
 import { reconcile } from '../db/reconcile';
@@ -190,12 +191,8 @@ export function pruneBackups(dir: string, keep: number): string[] {
   return removed;
 }
 
-const pad = (n: number): string => String(n).padStart(2, '0');
-
 /** Local time as yyyymmdd-hhmmss, for file names. */
-export function fileStamp(d: Date): string {
-  return `${String(d.getFullYear())}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-}
+export const fileStamp = localStamp;
 
 /** A file name in `dir` that does not exist yet (adds -2, -3... if the same second was used twice). */
 export function freshFileName(dir: string, base: string, ext: string): string {

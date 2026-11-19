@@ -106,3 +106,16 @@ describe('migration runner', () => {
     expect(() => loadMigrations(dir)).toThrow(/contiguous/);
   });
 });
+
+describe('line endings', () => {
+  it('a migration checks out the same on Windows (CRLF) as elsewhere (LF): same checksum, same result', () => {
+    const lf = tmpDir();
+    const crlf = tmpDir();
+    writeFileSync(join(lf, '001_a.sql'), 'CREATE TABLE a (id INTEGER);\nINSERT INTO a VALUES (1);\n');
+    writeFileSync(join(crlf, '001_a.sql'), 'CREATE TABLE a (id INTEGER);\r\nINSERT INTO a VALUES (1);\r\n');
+    expect(loadMigrations(crlf)[0]?.checksum).toBe(loadMigrations(lf)[0]?.checksum);
+    const db = memDb();
+    migrate(db, loadMigrations(lf));
+    expect(() => migrate(db, loadMigrations(crlf))).not.toThrow(); // a database made from one is accepted by the other
+  });
+});

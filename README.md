@@ -46,7 +46,7 @@ npm test        # tests only
 - `src/infrastructure/security/`: argon2id password hasher
 - `src/shared/`: typed `AppError` codes, injectable clock
 - `tests/`: unit tests for the domain, integration tests for migrations, the database-enforced rules, atomicity and ledger invariants
-- `docs/adr/`: 0001 money and rounding; 0002 Unit of Work and ledger posting; 0003 accounts, sessions and permissions; 0004 items and stock; 0005 customers and suppliers; 0006 sale bills and payments; 0007 purchases and the editable rate per piece; 0008 printing; 0009 reports and dashboard; 0010 backup, restore and demo mode
+- `docs/adr/`: 0001 money and rounding; 0002 Unit of Work and ledger posting; 0003 accounts, sessions and permissions; 0004 items and stock; 0005 customers and suppliers; 0006 sale bills and payments; 0007 purchases and the editable rate per piece; 0008 printing; 0009 reports and dashboard; 0010 backup, restore and demo mode; 0011 behaving the same on Windows and Linux
 
 ## Data safety
 Never commit real business data, `.mdb`/`.sqlite`/`.blazebak` files, bank or GSTIN details, or the real sample bill.

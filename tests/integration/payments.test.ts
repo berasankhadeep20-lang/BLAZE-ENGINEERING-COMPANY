@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppError, type ErrorCode } from '../../src/shared/errors';
 import { makeEmployee, quickBill, shopHarness, type Shop } from '../helpers/shop';
@@ -14,13 +15,11 @@ function codeOf(fn: () => unknown): ErrorCode | 'NO_ERROR' {
 const balance = (h: Shop, id = h.ids.farm): number => h.customers.get(h.ownerToken, id).balancePaise;
 const outstanding = (h: Shop, billId: number): number | null => h.sales.get(h.ownerToken, billId).outstandingPaise;
 
-const originalTz = process.env.TZ;
 beforeAll(() => {
-  process.env.TZ = 'Asia/Kolkata';
+  setShopTimeZone('Asia/Kolkata');
 });
 afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
+  setShopTimeZone(undefined);
 });
 
 describe('partial payments', () => {

@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { systemClock, type Clock } from '../../shared/clock';
 import { AppError } from '../../shared/errors';
-import { openDatabase, type Db } from '../db/connection';
+import { openDatabase, type Db, type Durability } from '../db/connection';
 import { loadMigrations, migrate } from '../db/migrate';
 import { createSafetyBackup, type CreatedBackup } from './backupFile';
 import { applyPendingRestore, finishPendingRestore } from './restoreStaging';
@@ -13,6 +13,7 @@ export interface OpenAppDatabaseOptions {
   dataDir: string; // the program's own folder: automatic safety copies go in <dataDir>/backups
   appVersion: string;
   clock?: Clock;
+  synchronous?: Durability; // leave unset in the real program (FULL: a saved bill survives a power cut)
 }
 
 export interface OpenedAppDatabase {
@@ -35,7 +36,7 @@ export function openAppDatabase(o: OpenAppDatabaseOptions): OpenedAppDatabase {
   const clock = o.clock ?? systemClock;
   mkdirSync(dirname(o.dbPath), { recursive: true }); // the very first start has no data folder yet
   const restore = applyPendingRestore(o.dbPath, clock.now());
-  const db = openDatabase(o.dbPath);
+  const db = openDatabase(o.dbPath, o.synchronous ? { synchronous: o.synchronous } : {});
   try {
     const migrations = loadMigrations(o.migrationsDir);
     const known = migrations[migrations.length - 1]?.version ?? 0;

@@ -25,7 +25,7 @@ export function loadMigrations(dir: string): MigrationFile[] {
   for (const file of files) {
     const m = /^(\d+)_(.+)\.sql$/.exec(file);
     if (!m) continue;
-    const sql = readFileSync(join(dir, file), 'utf8');
+    const sql = readFileSync(join(dir, file), 'utf8').replace(/\r\n/g, '\n'); // a Windows checkout may have changed the line endings; the checksum must not care
     out.push({
       version: Number(m[1]),
       name: m[2] ?? file,

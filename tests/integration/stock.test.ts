@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { postStockMovement } from '../../src/infrastructure/db/ledgers';
 import { UnitOfWork } from '../../src/infrastructure/db/unitOfWork';
@@ -111,13 +112,11 @@ describe('movement history', () => {
   });
 
   describe('date filters use the shop\'s local day (India, UTC+5:30)', () => {
-    const original = process.env.TZ;
     beforeAll(() => {
-      process.env.TZ = 'Asia/Kolkata';
+      setShopTimeZone('Asia/Kolkata');
     });
     afterAll(() => {
-      if (original === undefined) delete process.env.TZ;
-      else process.env.TZ = original;
+      setShopTimeZone(undefined);
     });
 
     it('puts a movement at 00:30 IST on 1 Nov into 1 Nov, not 31 Oct', async () => {

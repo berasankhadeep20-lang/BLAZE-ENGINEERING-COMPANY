@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
-import { localDateString, systemClock, type Clock } from '../../shared/clock';
+import { addDays, localDateString, systemClock, type Clock } from '../../shared/clock';
 import { AppError } from '../../shared/errors';
 import { dataMode, MODE_KEY } from '../../infrastructure/backup/backupFile';
 import { openDatabase, type Db } from '../../infrastructure/db/connection';
@@ -30,11 +30,7 @@ export interface DemoOptions {
   hasher?: PasswordHasher;
 }
 
-const daysAgo = (clock: Clock, n: number): string => {
-  const d = clock.now();
-  d.setDate(d.getDate() - n);
-  return localDateString(d);
-};
+const daysAgo = (clock: Clock, n: number): string => addDays(localDateString(clock.now()), -n);
 
 /** Fill an empty, migrated demo database with a small, realistic, entirely fictional business. Dates are relative to today so the demo always looks current. */
 function seedDemoData(s: AppServices, token: string, clock: Clock): void {
@@ -117,7 +113,7 @@ async function buildDemo(dbPath: string, o: DemoOptions, resetNote: string | nul
   mkdirSync(dirname(dbPath), { recursive: true });
   const clock = o.clock ?? systemClock;
   const hasher = o.hasher ?? argon2idHasher;
-  const db = openDatabase(dbPath);
+  const db = openDatabase(dbPath, { synchronous: 'OFF' }); // disposable sample data: no need to flush to disk after every one of the many commits while building
   try {
     migrate(db, loadMigrations(o.migrationsDir));
     db.prepare('INSERT INTO app_setting (key, value, updated_at) VALUES (?, ?, ?)').run(MODE_KEY, 'DEMO', clock.now().toISOString());
@@ -127,6 +123,7 @@ async function buildDemo(dbPath: string, o: DemoOptions, resetNote: string | nul
     const ownerToken = services.sessions.create(userId);
     seedDemoData(services, ownerToken, clock);
     if (resetNote) new UnitOfWork(db, clock).run({ userId, role: 'OWNER' }, (ctx) => recordAudit(ctx, { action: 'DEMO_RESET', entityType: 'demo', detail: { note: resetNote } }));
+    db.pragma('synchronous = FULL'); // back to the normal safety level for everyday use of the demo
     return { db, services, ownerToken, dbPath, created: true };
   } catch (e) {
     db.close();

@@ -1,5 +1,5 @@
 import { formatINR, mulDivRound, type Paise } from '../../domain/money';
-import { localDateString, systemClock, type Clock } from '../../shared/clock';
+import { addDays, localDateString, systemClock, type Clock } from '../../shared/clock';
 import { AppError } from '../../shared/errors';
 import { displayDate } from '../../shared/format';
 import type { Cell } from '../../shared/csv';
@@ -266,7 +266,7 @@ export class ReportService {
     checkRange(f);
     const today = localDateString(this.clock.now());
     const toDate = f.toDate ?? today;
-    const fromDate = f.fromDate ?? ((): string => { const d = new Date(`${toDate}T00:00:00`); d.setDate(d.getDate() - 89); return localDateString(d); })();
+    const fromDate = f.fromDate ?? addDays(toDate, -89);
     if (fromDate > toDate) throw new AppError('VALIDATION', 'the start date is after the end date');
     const maxSold = f.maxSoldMilli ?? 0;
     if (!Number.isSafeInteger(maxSold) || maxSold < 0) throw new AppError('VALIDATION', 'the sales limit must be zero or more');

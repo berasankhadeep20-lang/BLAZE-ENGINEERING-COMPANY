@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppError, type ErrorCode } from '../../src/shared/errors';
 import { makeEmployee, shopHarness, type Shop } from '../helpers/shop';
@@ -25,13 +26,11 @@ function purchase(h: Shop, opts: { supplierId?: number; qtyMilli?: number; date?
   return { id: b.id, total: b.totals.totalPaise };
 }
 
-const originalTz = process.env.TZ;
 beforeAll(() => {
-  process.env.TZ = 'Asia/Kolkata';
+  setShopTimeZone('Asia/Kolkata');
 });
 afterAll(() => {
-  if (originalTz === undefined) delete process.env.TZ;
-  else process.env.TZ = originalTz;
+  setShopTimeZone(undefined);
 });
 
 describe('paying a supplier', () => {

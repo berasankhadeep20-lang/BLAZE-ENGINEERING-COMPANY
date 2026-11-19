@@ -1,3 +1,4 @@
+import { setShopTimeZone } from '../../src/shared/clock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { stockStatus, uomLabel } from '../../src/domain/inventory';
 import { formatPlainRupees } from '../../src/domain/money';
@@ -45,13 +46,11 @@ describe('csv', () => {
 });
 
 describe('local day ranges (shop is in India, UTC+5:30)', () => {
-  const original = process.env.TZ;
   beforeAll(() => {
-    process.env.TZ = 'Asia/Kolkata';
+    setShopTimeZone('Asia/Kolkata');
   });
   afterAll(() => {
-    if (original === undefined) delete process.env.TZ;
-    else process.env.TZ = original;
+    setShopTimeZone(undefined);
   });
 
   it('turns local dates into UTC bounds', () => {

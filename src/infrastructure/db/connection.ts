@@ -6,13 +6,15 @@ export type Db = Database.Database;
  * Open a SQLite database with the safety settings this app relies on:
  *  - foreign_keys=ON      : enforce references
  *  - journal_mode=WAL     : crash-safe, readers never block the writer
- *  - synchronous=FULL     : a committed transaction survives power loss
+ *  - synchronous=FULL     : a committed transaction survives power loss (the default; tests and the disposable demo may choose a faster level)
  */
-export function openDatabase(path: string): Db {
+export type Durability = 'FULL' | 'NORMAL' | 'OFF';
+
+export function openDatabase(path: string, opts: { synchronous?: Durability } = {}): Db {
   const db = new Database(path);
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = FULL');
+  db.pragma(`synchronous = ${opts.synchronous ?? 'FULL'}`);
   db.pragma('busy_timeout = 5000');
   return db;
 }
