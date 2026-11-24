@@ -1,0 +1,38 @@
+name: Build Windows installer
+
+# Run it by hand: GitHub > Actions > "Build Windows installer" > Run workflow.
+# When it finishes, open the run and download "Blaze-Billing-Windows-Installer" from the Artifacts list at the bottom.
+# (Pushing a tag such as v0.1.0 also attaches the installer to a GitHub Release.)
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Build the installer
+        run: npm run dist:win
+      - name: Keep the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blaze-Billing-Windows-Installer
+          path: release/*.exe
+          if-no-files-found: error
+      - name: Attach to the release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe

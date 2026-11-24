@@ -9,3 +9,4 @@ out/
 *.accdb
 legacy-data/
 .env
+release/

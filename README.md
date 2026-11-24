@@ -16,6 +16,9 @@ Electron + TypeScript + React (Vite) + Tailwind + SQLite (better-sqlite3). Windo
 - `docs/API_MODULES_TESTING_ROADMAP.md`: IPC API, module build order, testing strategy, board and roadmap
 - `src/infrastructure/db/migrations/001_initial.sql`: first migration
 
+## Windows installer
+See `docs/INSTALLER.md`: run the **Build Windows installer** workflow on GitHub and download the `.exe`.
+
 ## Run (developer)
 Requires Node.js 22 LTS or newer.
 ```bash
