@@ -15,6 +15,7 @@ export interface HostHooks {
   exitDemo(): void;
   chooseFolder(): Promise<string | null>;
   saveInvoicePdf(billId: number): Promise<{ saved: boolean; path?: string }>;
+  printInvoice(billId: number): Promise<{ printed: boolean }>;
   log(message: string, error?: unknown): void;
 }
 
@@ -120,6 +121,51 @@ const METHODS = {
   'customers.list': auth((c, f: object | undefined) => c.s.customers.list(c.token, { limit: 300, ...(f ?? {}) })),
   'sales.list': auth((c, f: object | undefined) => c.s.sales.list(c.token, { limit: 200, ...(f ?? {}) })),
   'settings.get': auth((c) => c.s.settings.get(c.token)),
+  // ---- settings
+  'settings.update': auth((c, patch: object) => c.s.settings.update(c.token, patch as never)),
+  // ---- items and stock
+  'items.get': auth((c, id: number) => c.s.items.get(c.token, id)),
+  'items.create': auth((c, input: object) => c.s.items.create(c.token, input as never)),
+  'items.update': auth((c, id: number, patch: object) => c.s.items.update(c.token, id, patch as never)),
+  'items.setActive': auth((c, id: number, active: boolean) => c.s.items.setActive(c.token, id, active)),
+  'items.categories': auth((c) => c.s.items.listCategories(c.token)),
+  'items.createCategory': auth((c, name: string) => c.s.items.createCategory(c.token, name)),
+  'stock.recordLoss': auth((c, input: object) => c.s.stock.recordLoss(c.token, input as never)),
+  'stock.recordCount': auth((c, input: object) => c.s.stock.recordCount(c.token, input as never)),
+  // ---- customers, suppliers, payments
+  'customers.get': auth((c, id: number) => c.s.customers.get(c.token, id)),
+  'customers.create': auth((c, input: object) => c.s.customers.create(c.token, input as never)),
+  'customers.update': auth((c, id: number, patch: object) => c.s.customers.update(c.token, id, patch as never)),
+  'customers.approve': auth((c, id: number) => c.s.customers.approve(c.token, id)),
+  'customers.reject': auth((c, id: number, reason: string) => c.s.customers.reject(c.token, id, reason)),
+  'customers.statement': auth((c, id: number) => c.s.customers.statement(c.token, id)),
+  'suppliers.list': auth((c, f: object | undefined) => c.s.suppliers.list(c.token, { limit: 300, ...(f ?? {}) })),
+  'suppliers.create': auth((c, input: object) => c.s.suppliers.create(c.token, input as never)),
+  'suppliers.update': auth((c, id: number, patch: object) => c.s.suppliers.update(c.token, id, patch as never)),
+  'suppliers.statement': auth((c, id: number) => c.s.suppliers.statement(c.token, id)),
+  'payments.record': auth((c, input: object) => c.s.payments.record(c.token, input as never)),
+  'payments.reverse': auth((c, id: number, reason: string) => c.s.payments.reverse(c.token, id, reason)),
+  'supplierPayments.record': auth((c, input: object) => c.s.supplierPayments.record(c.token, input as never)),
+  // ---- sale bills
+  'sales.quoteLine': auth((c, input: object) => c.s.sales.quoteLine(c.token, input as never)),
+  'sales.preview': auth((c, input: object) => c.s.sales.preview(c.token, input as never)),
+  'sales.saveDraft': auth((c, input: object) => c.s.sales.saveDraft(c.token, input as never)),
+  'sales.get': auth((c, id: number) => c.s.sales.get(c.token, id)),
+  'sales.confirm': auth((c, id: number, opts: object | undefined) => c.s.sales.confirm(c.token, id, (opts ?? {}) as never)),
+  'sales.cancel': auth((c, id: number, reason: string) => c.s.sales.cancel(c.token, id, reason)),
+  'sales.deleteDraft': auth((c, id: number) => c.s.sales.deleteDraft(c.token, id)),
+  // ---- purchase bills
+  'purchases.list': auth((c, f: object | undefined) => c.s.purchases.list(c.token, { limit: 200, ...(f ?? {}) })),
+  'purchases.quoteLine': auth((c, input: object) => c.s.purchases.quoteLine(c.token, input as never)),
+  'purchases.preview': auth((c, input: object) => c.s.purchases.preview(c.token, input as never)),
+  'purchases.saveDraft': auth((c, input: object) => c.s.purchases.saveDraft(c.token, input as never)),
+  'purchases.get': auth((c, id: number) => c.s.purchases.get(c.token, id)),
+  'purchases.confirm': auth((c, id: number, opts: object | undefined) => c.s.purchases.confirm(c.token, id, (opts ?? {}) as never)),
+  'purchases.receive': auth((c, id: number, input: object) => c.s.purchases.receive(c.token, id, input as never)),
+  'purchases.cancel': auth((c, id: number, reason: string) => c.s.purchases.cancel(c.token, id, reason)),
+  'purchases.deleteDraft': auth((c, id: number) => c.s.purchases.deleteDraft(c.token, id)),
+  // ---- reports
+  'reports.table': auth((c, req: object) => c.s.reports.table(c.token, req as never)),
   // ---- backup
   'backup.status': auth((c) => (c.s.backup ? c.s.backup.status(c.token) : null)),
   'backup.history': auth((c) => (c.s.backup ? c.s.backup.history(c.token, 10) : [])),
@@ -132,6 +178,7 @@ const METHODS = {
   }),
   // ---- printing
   'print.invoicePdf': auth((c, billId: number) => c.host.hooks.saveInvoicePdf(billId)),
+  'print.invoicePrint': auth((c, billId: number) => c.host.hooks.printInvoice(billId)),
 } satisfies Record<string, { auth: boolean; fn: Handler }>;
 
 export const METHOD_NAMES = Object.keys(METHODS);

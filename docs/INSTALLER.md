@@ -16,8 +16,19 @@ The installer is not code-signed yet, so Windows SmartScreen may say "Windows pr
 - Your data lives in `%APPDATA%\Blaze Billing\data\`. Uninstalling the program does NOT delete it. Back up regularly from the Backup screen.
 - Problems are written to `%APPDATA%\Blaze Billing\blaze.log`.
 
-## What this first version contains
-Sign-in and first-run setup, dashboard, inventory list, customers and dues list, sale bills list with Save-as-PDF (the A4 invoice), backup with verification, and a demo mode. The screens for CREATING bills, purchases and payments, reports, settings and restore are the next update; the code behind them is already built and tested.
+## What version 0.2.0 contains
+- **Settings** (owner): business name, state, invoice prefix, GSTIN, address, phone, email, bank details, terms. Fill in the state and the prefix first: bills cannot be issued without them.
+- **Inventory**: add and edit items (with the stock you have now), categories, correct stock after a count or damage, deactivate items.
+- **Customers and suppliers**: add, edit, statements, record payments received or made; new customers added by an employee wait for the owner to approve them.
+- **Sale bills**: choose the customer, add items (the item's current rate is shown first and can be changed for this bill), live totals, discounts, delivery charge, money received now, a warning if a bill is priced below cost, issue, print, save as PDF, record later payments, cancel with a reason.
+- **Purchase bills**: the supplier's invoice, invoiced versus received quantities (stock only goes up by what arrived), add the rest later, pay the supplier, cancel.
+- **Reports**: best sellers, sales and purchases by day or month, what a customer has bought, items that are not selling, purchases by supplier.
+- Dashboard, backup with verification, demo mode, and sign-in as before.
+
+Not in this version yet: managing user accounts and permissions (only the owner account exists for now), restoring a backup, and uploading a logo. The code behind them is built and tested; the screens are next.
+
+## Updating from 0.1.0
+Run the new installer over the old one. Your data stays (it lives in `%APPDATA%\Blaze Billing\data\`).
 
 ## For developers
 - `npm test` / `npm run check`: typecheck, lint and tests (run on Node).

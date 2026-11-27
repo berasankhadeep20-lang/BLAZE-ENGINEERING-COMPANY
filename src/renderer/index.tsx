@@ -2,40 +2,16 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { formatINR, formatQty } from '../domain/money';
 import { displayDate } from '../shared/format';
+import { call, can, errText, type User } from './api';
+import { Items } from './items';
+import { Parties } from './parties';
+import { Purchases } from './purchases';
+import { Reports } from './reports';
+import { Sales } from './sales';
+import { Settings } from './settings';
+import { Err, Msg, useFields, useLoad } from './ui';
 
-// ---- talking to the program (through the one allowed door)
-interface Result { ok: boolean; data?: unknown; error?: { code: string; message: string } }
-declare global {
-  interface Window { api: { invoke(method: string, args: unknown[]): Promise<Result> } }
-}
-async function call<T = unknown>(method: string, ...args: unknown[]): Promise<T> {
-  const r = await window.api.invoke(method, args);
-  if (!r.ok) throw new Error(r.error?.message ?? 'Something went wrong');
-  return r.data as T;
-}
-const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-
-interface User { id: number; username: string; displayName: string; role: 'OWNER' | 'EMPLOYEE'; mustChangePassword: boolean; permissions: string[] }
 interface AppState { firstRun: boolean; mode: 'REAL' | 'DEMO'; version: string; user: User | null }
-const can = (u: User, ...perms: string[]): boolean => u.role === 'OWNER' || perms.some((p) => u.permissions.includes(p));
-
-function useLoad<T>(method: string, ...args: unknown[]): { data: T | null; error: string | null; reload: () => void } {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const key = JSON.stringify(args);
-  const reload = useCallback(() => {
-    setError(null);
-    call<T>(method, ...(JSON.parse(key) as unknown[])).then(setData, (e: unknown) => setError(errText(e)));
-  }, [method, key]);
-  useEffect(reload, [reload]);
-  return { data, error, reload };
-}
-
-type Fields = Record<string, string>;
-const useFields = (init: Fields): [Fields, (k: string) => (e: { target: { value: string } }) => void] => {
-  const [f, setF] = useState(init);
-  return [f, (k) => (e) => setF({ ...f, [k]: e.target.value })];
-};
 
 // ---- first run, sign in, forgotten password, change password
 function Setup({ onDone }: { onDone: () => void }): ReactNode {
@@ -174,20 +150,21 @@ interface BackupStatus { folder: string | null; reminderDue: boolean; lastBackup
 const Stat = ({ label, value, sub }: { label: string; value: string; sub?: string }): ReactNode => (
   <div className="card stat"><div className="l">{label}</div><div className="n">{value}</div>{sub && <div className="muted">{sub}</div>}</div>
 );
-const Err = ({ text }: { text: string | null }): ReactNode => (text ? <div className="err">{text}</div> : null);
-const Msg = ({ m }: { m: { ok: boolean; text: string } | null }): ReactNode => (m ? <div className={m.ok ? 'ok' : 'err'}>{m.text}</div> : null);
 
 function Dashboard({ user, go }: { user: User; go: (page: string) => void }): ReactNode {
   const { data: d, error } = useLoad<Dash>('dashboard.get');
   const canBackup = can(user, 'backup.create', 'backup.restore');
   const { data: b } = useLoad<BackupStatus | null>(canBackup ? 'backup.status' : 'app.state');
   const backup = canBackup ? b : null;
+  const cfg = useLoad<{ businessState: string | null; invoicePrefix: string | null }>(can(user, 'settings.edit') ? 'settings.get' : 'app.state');
+  const needsSetup = can(user, 'settings.edit') && !!cfg.data && 'invoicePrefix' in cfg.data && (!cfg.data.businessState || !cfg.data.invoicePrefix);
   if (error) return <Err text={error} />;
   if (!d) return <p className="muted">Loading…</p>;
   return (
     <>
       <h1>Dashboard</h1>
       <p className="muted">Hello, {user.displayName}.</p>
+      {needsSetup && <div className="warn"><span><b>First step:</b> enter your business details (state, invoice number prefix, address, GSTIN, bank details) in Settings. Bills cannot be issued until the state and prefix are set.</span><button className="primary" onClick={() => go('settings')}>Open Settings</button></div>}
       {backup?.reminderDue && (
         <div className="warn"><span>{backup.lastBackup ? `Your last backup was ${String(backup.lastBackup.daysAgo)} days ago.` : 'You have not made a backup yet.'} Back up now to keep your data safe.</span><button onClick={() => go('backup')}>Go to Backup</button></div>
       )}
@@ -221,49 +198,6 @@ function Dashboard({ user, go }: { user: User; go: (page: string) => void }): Re
       </div>
     </>
   );
-}
-
-const Search = ({ value, onChange, children }: { value: string; onChange: (v: string) => void; children?: ReactNode }): ReactNode => (
-  <div className="bar"><input type="search" placeholder="Search…" value={value} onChange={(e) => onChange(e.target.value)} />{children}</div>
-);
-
-function Inventory(): ReactNode {
-  const [q, setQ] = useState('');
-  const { data, error } = useLoad<{ rows: { id: number; code: string; name: string; category: string | null; uomLabel: string; qtyMilli: number; reorderQtyMilli: number; saleRatePaise: number; stockStatus: string }[]; total: number }>('items.list', { search: q });
-  return (<><h1>Inventory</h1><Search value={q} onChange={setQ}><span className="muted">{data ? `${String(data.total)} item(s)` : ''}</span></Search><Err text={error} />
-    <table><thead><tr><th>Code</th><th>Item</th><th>Category</th><th>Unit</th><th className="r">In stock</th><th className="r">Reorder at</th><th className="r">Sale rate</th><th>Status</th></tr></thead><tbody>
-      {data?.rows.map((i) => (<tr key={i.id}><td>{i.code}</td><td>{i.name}</td><td>{i.category}</td><td>{i.uomLabel}</td><td className="r">{formatQty(i.qtyMilli)}</td><td className="r">{formatQty(i.reorderQtyMilli)}</td><td className="r">{formatINR(i.saleRatePaise)}</td>
-        <td><span className={`chip ${i.stockStatus === 'OUT' ? 'bad' : i.stockStatus === 'LOW' ? 'low' : 'good'}`}>{i.stockStatus === 'OUT' ? 'sold out' : i.stockStatus === 'LOW' ? 'low' : 'ok'}</span></td></tr>))}
-      {data && data.rows.length === 0 && <tr><td colSpan={8} className="muted">No items match.</td></tr>}</tbody></table></>);
-}
-
-function Customers(): ReactNode {
-  const [q, setQ] = useState('');
-  const [dues, setDues] = useState(false);
-  const { data, error } = useLoad<{ rows: { id: number; name: string; phone: string | null; state: string | null; gstinDisplay: string; balancePaise: number; approvalStatus: string }[] }>('customers.list', { search: q, hasDues: dues });
-  return (<><h1>Customers and dues</h1><Search value={q} onChange={setQ}><label style={{ margin: 0, fontWeight: 400 }}><input type="checkbox" style={{ width: 'auto', marginRight: 6 }} checked={dues} onChange={(e) => setDues(e.target.checked)} />Only customers who owe money</label></Search><Err text={error} />
-    <table><thead><tr><th>Customer</th><th>Phone</th><th>State</th><th>GSTIN</th><th className="r">Balance due</th><th>Status</th></tr></thead><tbody>
-      {data?.rows.map((c) => (<tr key={c.id}><td>{c.name}</td><td>{c.phone}</td><td>{c.state}</td><td>{c.gstinDisplay}</td><td className="r">{formatINR(c.balancePaise)}</td><td>{c.approvalStatus === 'PENDING' ? <span className="chip low">awaiting approval</span> : ''}</td></tr>))}
-      {data && data.rows.length === 0 && <tr><td colSpan={6} className="muted">No customers match.</td></tr>}</tbody></table></>);
-}
-
-function Sales(): ReactNode {
-  const [q, setQ] = useState('');
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const { data, error } = useLoad<{ rows: { id: number; billNo: string | null; status: string; invoiceDate: string; customerName: string; totalPaise: number; outstandingPaise: number | null }[] }>('sales.list', { search: q });
-  const pdf = async (id: number): Promise<void> => {
-    try {
-      const r = await call<{ saved: boolean; path?: string }>('print.invoicePdf', id);
-      setMsg(r.saved ? { ok: true, text: `Saved: ${r.path ?? ''}` } : null);
-    } catch (e) {
-      setMsg({ ok: false, text: errText(e) });
-    }
-  };
-  return (<><h1>Sale bills</h1><Search value={q} onChange={setQ} /><Err text={error} /><Msg m={msg} />
-    <table style={{ marginTop: 10 }}><thead><tr><th>Bill</th><th>Date</th><th>Customer</th><th className="r">Total</th><th className="r">Due</th><th>Status</th><th /></tr></thead><tbody>
-      {data?.rows.map((b) => (<tr key={b.id}><td>{b.billNo ?? 'DRAFT'}</td><td>{displayDate(b.invoiceDate)}</td><td>{b.customerName}</td><td className="r">{formatINR(b.totalPaise)}</td><td className="r">{b.outstandingPaise === null ? '' : formatINR(b.outstandingPaise)}</td>
-        <td>{b.status === 'CANCELLED' ? <span className="chip bad">cancelled</span> : b.status === 'DRAFT' ? <span className="chip low">draft</span> : ''}</td><td><button onClick={() => void pdf(b.id)}>Save PDF</button></td></tr>))}
-      {data && data.rows.length === 0 && <tr><td colSpan={7} className="muted">No bills yet.</td></tr>}</tbody></table></>);
 }
 
 interface Hist { id: number; at: string; kind: string; path: string; verified: boolean; fileStillThere: boolean }
@@ -310,8 +244,12 @@ function Backup({ mode }: { mode: string }): ReactNode {
 const PAGES: { id: string; label: string; show: (u: User) => boolean }[] = [
   { id: 'dashboard', label: 'Dashboard', show: () => true },
   { id: 'sales', label: 'Sale bills', show: (u) => can(u, 'sale.create', 'customer.view', 'report.view') },
+  { id: 'purchases', label: 'Purchase bills', show: (u) => can(u, 'purchase.create', 'supplier.view', 'report.view') },
   { id: 'inventory', label: 'Inventory', show: (u) => can(u, 'inventory.view') },
   { id: 'customers', label: 'Customers and dues', show: (u) => can(u, 'customer.view') },
+  { id: 'suppliers', label: 'Suppliers', show: (u) => can(u, 'supplier.view') },
+  { id: 'reports', label: 'Reports', show: (u) => can(u, 'report.view') },
+  { id: 'settings', label: 'Settings', show: (u) => can(u, 'settings.edit') },
   { id: 'backup', label: 'Backup', show: (u) => can(u, 'backup.create', 'backup.restore') },
 ];
 
@@ -329,15 +267,19 @@ function Shell({ state, refresh }: { state: AppState; refresh: () => void }): Re
         <nav className="side">
           <div className="brand">Blaze Billing</div>
           {PAGES.filter((p) => p.show(user)).map((p) => (<button key={p.id} className={`nav ${page === p.id ? 'active' : ''}`} onClick={() => setPage(p.id)}>{p.label}</button>))}
-          <div className="soon">Screens for creating bills, purchases and payments, reports and settings arrive in the next update.</div>
+          <div className="soon">Coming next: user accounts and permissions, and restoring a backup.</div>
           <div className="who">{user.displayName}<br /><span style={{ opacity: 0.7 }}>{user.role === 'OWNER' ? 'Owner' : 'Employee'} · v{state.version}</span>
             <button onClick={() => void leave()}>{state.mode === 'DEMO' ? 'Leave demo' : 'Sign out'}</button></div>
         </nav>
         <main className="main">
           {page === 'dashboard' && <Dashboard user={user} go={setPage} />}
-          {page === 'sales' && <Sales />}
-          {page === 'inventory' && <Inventory />}
-          {page === 'customers' && <Customers />}
+          {page === 'sales' && <Sales user={user} />}
+          {page === 'purchases' && <Purchases user={user} />}
+          {page === 'inventory' && <Items user={user} />}
+          {page === 'customers' && <Parties kind="customer" user={user} />}
+          {page === 'suppliers' && <Parties kind="supplier" user={user} />}
+          {page === 'reports' && <Reports />}
+          {page === 'settings' && <Settings />}
           {page === 'backup' && <Backup mode={state.mode} />}
         </main>
       </div>

@@ -36,3 +36,20 @@ td.r, th.r { text-align: right; font-variant-numeric: tabular-nums; }
 .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: #eaecf0; }
 .chip.bad { background: #fee4e2; color: #b42318; } .chip.low { background: #fef0c7; color: #93370d; } .chip.good { background: #d1fadf; color: #067647; }
 .bar { display: flex; gap: 10px; align-items: center; margin: 12px 0; } .bar input[type=search] { max-width: 340px; }
+select { font: inherit; padding: 8px 10px; border: 1px solid #b8c0cc; border-radius: 6px; width: 100%; background: #fff; }
+textarea { font: inherit; padding: 8px 10px; border: 1px solid #b8c0cc; border-radius: 6px; width: 100%; background: #fff; min-height: 64px; resize: vertical; }
+.overlay { position: fixed; inset: 0; background: rgba(16,24,40,.55); display: flex; align-items: flex-start; justify-content: center; padding: 30px 20px; overflow: auto; z-index: 10; }
+.modal { background: #fff; border-radius: 10px; padding: 20px; width: 560px; max-width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.modal.wide { width: 980px; }
+.mh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; } .form .full { grid-column: 1 / -1; }
+.fld label { margin: 10px 0 4px; } .hint { color: #667085; font-size: 12px; margin-top: 3px; }
+.actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.picker { position: relative; max-width: 520px; } .dd { position: absolute; left: 0; right: 0; top: 100%; background: #fff; border: 1px solid #b8c0cc; border-radius: 6px; z-index: 5; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+.dd div { padding: 8px 10px; cursor: pointer; } .dd div:hover { background: #eff4ff; }
+.editor { display: grid; grid-template-columns: 1fr 330px; gap: 18px; align-items: start; } @media (max-width: 1250px) { .editor { grid-template-columns: 1fr; } }
+.totals { position: sticky; top: 0; } .totals .row { display: flex; justify-content: space-between; padding: 4px 0; font-variant-numeric: tabular-nums; }
+.totals .big { font-size: 20px; font-weight: 700; border-top: 2px solid #1f2933; margin-top: 6px; padding-top: 8px; }
+td input { padding: 5px 7px; } td.num input { text-align: right; width: 110px; } td .sub { font-size: 12px; color: #667085; margin-top: 3px; }
+.badrow { background: #fef3f2; } .tight td, .tight th { padding: 5px 8px; }
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; } .tabs button.on { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }

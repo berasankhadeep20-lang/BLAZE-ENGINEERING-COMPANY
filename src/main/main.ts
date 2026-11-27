@@ -37,6 +37,17 @@ async function pdfFromHtml(html: string): Promise<Buffer> {
   }
 }
 
+/** Opens the normal Windows print dialog for an invoice (the same HTML as the PDF). */
+async function printHtml(html: string): Promise<boolean> {
+  const hidden = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true, contextIsolation: true } });
+  try {
+    await hidden.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    return await new Promise<boolean>((resolve) => hidden.webContents.print({ silent: false, printBackground: true, pageSize: 'A4', margins: { marginType: 'none' } }, (ok) => resolve(ok)));
+  } finally {
+    hidden.destroy();
+  }
+}
+
 function makeHooks(): HostHooks {
   return {
     appVersion: app.getVersion(),
@@ -53,6 +64,14 @@ function makeHooks(): HostHooks {
       const options = { title: 'Choose where to save backups (for example a USB drive)', properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[] };
       const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
       return r.canceled ? null : (r.filePaths[0] ?? null);
+    },
+    async printInvoice(billId) {
+      const s = host.activeServices();
+      const token = host.sessionToken();
+      const r = s.print.invoice(token, billId);
+      const ok = await printHtml(r.html);
+      if (ok) s.print.recordPrint(token, billId, 'PRINT', r.copies);
+      return { printed: ok };
     },
     async saveInvoicePdf(billId) {
       const s = host.activeServices();
